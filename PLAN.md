@@ -1151,9 +1151,13 @@ Pasos:
   `pos_repository.py` y `SqlAlchemyPinAttempts` (el intento de PIN se guarda en su propia transacción).
   La función SQL `pos_user_name()` (0146) da el nombre del empleado o el usuario. Pruebas:
   `test_pos_shift_concurrency.py` (dos aperturas simultáneas: gana una; bloqueo y desbloqueo del PIN).
-- [ ] **Paso 4: API, RBAC y auditoría.** Routers `/pos/registers`, `/pos/shifts`, `/pos/me` con
+- [x] **Paso 4: API, RBAC y auditoría.** Routers `/pos/registers`, `/pos/shifts`, `/pos/me` con
   `require_permission`, alcance por sucursal y bitácora en toda escritura. Verificar: e2e (permisos, sucursal ajena,
   cierre ciego no expone el esperado al cajero).
+  Hecho: router `routers/pos.py` (prefijo `/pos`) y esquemas `schemas/pos.py`; e2e `test_pos_shifts.py` (5 pasan):
+  configuración de cajas, apertura idempotente, caja ocupada, salida con PIN, cierre ciego, recuento,
+  aprobación, depósito (fecha no futura ni anterior al cierre), autoaprobación prohibida, sucursal ajena.
+  Las inserciones que pueden chocar van en un punto de guardado: el error de negocio confirma la sesión.
 - [ ] **Paso 5: interfaz.** Configuración de cajas; espacio del cajero en `/pos` a pantalla completa y entrada directa
   para quien solo tiene el POS; abrir turno, movimientos, cierre ciego; panel del supervisor (turnos de la sucursal,
   aprobar, depósito); informe X/Z imprimible. Verificar: vitest; svelte-check y lint.
@@ -1162,7 +1166,7 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: V6a paso 4 (API, RBAC y auditoría), rama `feature/pos-v6a-cajas`. V9 completo en develop
+- **Paso en curso**: V6a paso 5 (interfaz), rama `feature/pos-v6a-cajas`. V9 completo en develop
   (#69–#71) y versión v2.1.0 publicada (26/11/2026). El plan del POS (V6a–V6f) está arriba, con las decisiones del usuario.
   créditos fiscales—, cobros, 5 devoluciones, 1 cambio y la meta); 328 salidas de kardex en octubre; la segunda corrida
   no crea nada. Verificado en el navegador: análisis de octubre ($9,767.19 sin IVA, margen 32.68 %, devoluciones 1.96 %)

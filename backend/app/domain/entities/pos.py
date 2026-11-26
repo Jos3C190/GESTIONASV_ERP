@@ -333,3 +333,11 @@ def validate_pin(pin: str) -> str:
             "pos_pin_weak", "Elige un PIN difícil de adivinar: sin dígitos repetidos ni seguidos."
         )
     return pin
+
+
+def shift_code(number: int) -> str:
+    return f"TUR-{number:06d}"
+
+
+def deposit_code(number: int) -> str:
+    return f"DEP-{number:06d}"

@@ -11,6 +11,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from app.core.exceptions import (
     AuthorizationError,
@@ -48,6 +49,7 @@ from app.domain.ports.pos_repository import (
     DepositShift,
     Person,
     PinAttempts,
+    PointOfSaleOption,
     PosRepository,
     Register,
     RegisterData,
@@ -57,6 +59,7 @@ from app.domain.ports.pos_repository import (
 )
 
 MIN_KEY = 8
+_TZ = ZoneInfo("America/El_Salvador")
 
 
 @dataclass(frozen=True)
@@ -132,6 +135,19 @@ class PosUseCases:
         found = await self._repository.register(company_id, register_id)
         if found is None:
             raise _not_found_register()
+        return found
+
+    async def point_of_sale_options(self, company_id: uuid.UUID) -> list[PointOfSaleOption]:
+        return await self._repository.point_of_sale_options(company_id)
+
+    async def point_of_sale(
+        self, company_id: uuid.UUID, point_of_sale_id: uuid.UUID
+    ) -> PointOfSaleOption:
+        found = await self._repository.point_of_sale(company_id, point_of_sale_id)
+        if found is None:
+            raise NotFoundError(
+                "Punto de venta fiscal no encontrado.", code="pos_point_of_sale_not_found"
+            )
         return found
 
     async def create_register(
@@ -292,6 +308,19 @@ class PosUseCases:
             actor_id=cashier_id,
         )
         return await self._shift(company_id, shift_id)
+
+    async def shift_by_key(self, company_id: uuid.UUID, key: str) -> Shift | None:
+        return await self._repository.shift_by_key(company_id, key.strip())
+
+    async def movement_by_key(self, company_id: uuid.UUID, key: str) -> CashMovement | None:
+        return await self._repository.movement_by_key(company_id, key.strip())
+
+    async def deposit_by_key(self, company_id: uuid.UUID, key: str) -> Deposit | None:
+        return await self._repository.deposit_by_key(company_id, key.strip())
+
+    async def person(self, user_id: uuid.UUID) -> str:
+        found = await self._repository.person(user_id)
+        return "" if found is None else found.name
 
     async def current_shift(self, company_id: uuid.UUID, cashier_id: uuid.UUID) -> Shift | None:
         return await self._repository.unclosed_shift_for_cashier(company_id, cashier_id)
@@ -541,6 +570,7 @@ class PosUseCases:
         deposited_amount: Decimal,
         notes: str | None,
         idempotency_key: str,
+        today: date,
     ) -> Deposit:
         key = _key(idempotency_key)
         repeated = await self._repository.deposit_by_key(company_id, key)
@@ -578,6 +608,19 @@ class PosUseCases:
                 code="pos_deposit_shift_unavailable",
             )
         chosen = [candidates[shift_id] for shift_id in shift_ids]
+        if deposited_on > today:
+            raise BusinessRuleError(
+                "La fecha del depósito no puede ser futura.", code="pos_deposit_date_future"
+            )
+        last_close = max(
+            (item.closed_at.astimezone(_TZ).date() for item in chosen if item.closed_at),
+            default=None,
+        )
+        if last_close is not None and deposited_on < last_close:
+            raise BusinessRuleError(
+                f"La fecha del depósito no puede ser anterior al cierre del turno ({last_close:%d/%m/%Y}).",
+                code="pos_deposit_date_before_close",
+            )
         expected = money(sum((item.amount for item in chosen), ZERO))
         clean_notes = _notes(notes)
         difference = validate_deposit(

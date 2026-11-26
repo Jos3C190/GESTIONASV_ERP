@@ -297,29 +297,30 @@ class SqlAlchemyPosRepository:
     ) -> uuid.UUID:
         register_id = uuid.uuid4()
         try:
-            await self._session.execute(
-                text(
-                    "INSERT INTO pos_registers (id, company_id, branch_id, establishment_id, "
-                    "point_of_sale_id, code, name, opening_float, cash_out_approval_threshold, "
-                    "cash_drawer_limit, is_active, created_by_id, updated_by_id) VALUES (:id, "
-                    ":company, :branch, :establishment, :point, :code, :name, :float, :threshold, "
-                    ":limit, :active, :actor, :actor)"
-                ),
-                {
-                    "id": register_id,
-                    "company": company_id,
-                    "branch": point_of_sale.branch_id,
-                    "establishment": point_of_sale.establishment_id,
-                    "point": point_of_sale.id,
-                    "code": data.code,
-                    "name": data.name,
-                    "float": data.opening_float,
-                    "threshold": data.cash_out_approval_threshold,
-                    "limit": data.cash_drawer_limit,
-                    "active": data.is_active,
-                    "actor": actor_id,
-                },
-            )
+            async with self._session.begin_nested():
+                await self._session.execute(
+                    text(
+                        "INSERT INTO pos_registers (id, company_id, branch_id, establishment_id, "
+                        "point_of_sale_id, code, name, opening_float, cash_out_approval_threshold, "
+                        "cash_drawer_limit, is_active, created_by_id, updated_by_id) VALUES (:id, "
+                        ":company, :branch, :establishment, :point, :code, :name, :float, :threshold, "
+                        ":limit, :active, :actor, :actor)"
+                    ),
+                    {
+                        "id": register_id,
+                        "company": company_id,
+                        "branch": point_of_sale.branch_id,
+                        "establishment": point_of_sale.establishment_id,
+                        "point": point_of_sale.id,
+                        "code": data.code,
+                        "name": data.name,
+                        "float": data.opening_float,
+                        "threshold": data.cash_out_approval_threshold,
+                        "limit": data.cash_drawer_limit,
+                        "active": data.is_active,
+                        "actor": actor_id,
+                    },
+                )
         except IntegrityError as error:
             raise ConflictError(
                 "Otra persona registró esa caja o ese punto de venta al mismo tiempo.",
@@ -453,23 +454,24 @@ class SqlAlchemyPosRepository:
         )
         shift_id = uuid.uuid4()
         try:
-            await self._session.execute(
-                text(
-                    "INSERT INTO pos_shifts (id, company_id, branch_id, register_id, cashier_id, "
-                    "number, opening_float, idempotency_key) VALUES (:id, :company, :branch, "
-                    ":register, :cashier, :number, :float, :key)"
-                ),
-                {
-                    "id": shift_id,
-                    "company": company_id,
-                    "branch": register.branch_id,
-                    "register": register.id,
-                    "cashier": cashier_id,
-                    "number": number,
-                    "float": opening_float,
-                    "key": idempotency_key,
-                },
-            )
+            async with self._session.begin_nested():
+                await self._session.execute(
+                    text(
+                        "INSERT INTO pos_shifts (id, company_id, branch_id, register_id, cashier_id, "
+                        "number, opening_float, idempotency_key) VALUES (:id, :company, :branch, "
+                        ":register, :cashier, :number, :float, :key)"
+                    ),
+                    {
+                        "id": shift_id,
+                        "company": company_id,
+                        "branch": register.branch_id,
+                        "register": register.id,
+                        "cashier": cashier_id,
+                        "number": number,
+                        "float": opening_float,
+                        "key": idempotency_key,
+                    },
+                )
         except IntegrityError as error:
             raise ConflictError(
                 "La caja o el cajero ya tienen un turno sin cerrar.", code="pos_shift_conflict"
@@ -599,25 +601,32 @@ class SqlAlchemyPosRepository:
         idempotency_key: str,
     ) -> uuid.UUID:
         movement_id = uuid.uuid4()
-        await self._session.execute(
-            text(
-                "INSERT INTO pos_cash_movements (id, company_id, shift_id, kind, amount, reason, "
-                "reference, authorized_by_id, created_by_id, idempotency_key) VALUES (:id, "
-                ":company, :shift, :kind, :amount, :reason, :reference, :authorizer, :actor, :key)"
-            ),
-            {
-                "id": movement_id,
-                "company": company_id,
-                "shift": shift_id,
-                "kind": kind.value,
-                "amount": amount,
-                "reason": reason,
-                "reference": reference,
-                "authorizer": authorized_by_id,
-                "actor": actor_id,
-                "key": idempotency_key,
-            },
-        )
+        try:
+            async with self._session.begin_nested():
+                await self._session.execute(
+                    text(
+                        "INSERT INTO pos_cash_movements (id, company_id, shift_id, kind, amount, reason, "
+                        "reference, authorized_by_id, created_by_id, idempotency_key) VALUES (:id, "
+                        ":company, :shift, :kind, :amount, :reason, :reference, :authorizer, :actor, :key)"
+                    ),
+                    {
+                        "id": movement_id,
+                        "company": company_id,
+                        "shift": shift_id,
+                        "kind": kind.value,
+                        "amount": amount,
+                        "reason": reason,
+                        "reference": reference,
+                        "authorizer": authorized_by_id,
+                        "actor": actor_id,
+                        "key": idempotency_key,
+                    },
+                )
+        except IntegrityError as error:
+            raise ConflictError(
+                "La clave de idempotencia ya se usó para otro movimiento.",
+                code="pos_idempotency_conflict",
+            ) from error
         return movement_id
 
     async def counts(self, company_id: uuid.UUID, shift_id: uuid.UUID) -> list[ShiftCount]:
@@ -869,47 +878,48 @@ class SqlAlchemyPosRepository:
         )
         deposit_id = uuid.uuid4()
         try:
-            await self._session.execute(
-                text(
-                    "INSERT INTO pos_deposits (id, company_id, branch_id, number, deposited_on, "
-                    "bank_name, account_reference, slip_number, expected_amount, deposited_amount, "
-                    "difference, notes, created_by_id, idempotency_key) VALUES (:id, :company, "
-                    ":branch, :number, :on, :bank, :account, :slip, :expected, :deposited, "
-                    ":difference, :notes, :actor, :key)"
-                ),
-                {
-                    "id": deposit_id,
-                    "company": company_id,
-                    "branch": branch_id,
-                    "number": number,
-                    "on": deposited_on,
-                    "bank": bank_name,
-                    "account": account_reference,
-                    "slip": slip_number,
-                    "expected": expected_amount,
-                    "deposited": deposited_amount,
-                    "difference": difference,
-                    "notes": notes,
-                    "actor": actor_id,
-                    "key": idempotency_key,
-                },
-            )
-            await self._session.execute(
-                text(
-                    "INSERT INTO pos_deposit_shifts (company_id, deposit_id, shift_id, branch_id, "
-                    "amount) VALUES (:company, :deposit, :shift, :branch, :amount)"
-                ),
-                [
+            async with self._session.begin_nested():
+                await self._session.execute(
+                    text(
+                        "INSERT INTO pos_deposits (id, company_id, branch_id, number, deposited_on, "
+                        "bank_name, account_reference, slip_number, expected_amount, deposited_amount, "
+                        "difference, notes, created_by_id, idempotency_key) VALUES (:id, :company, "
+                        ":branch, :number, :on, :bank, :account, :slip, :expected, :deposited, "
+                        ":difference, :notes, :actor, :key)"
+                    ),
                     {
+                        "id": deposit_id,
                         "company": company_id,
-                        "deposit": deposit_id,
-                        "shift": item.shift_id,
                         "branch": branch_id,
-                        "amount": item.amount,
-                    }
-                    for item in shifts
-                ],
-            )
+                        "number": number,
+                        "on": deposited_on,
+                        "bank": bank_name,
+                        "account": account_reference,
+                        "slip": slip_number,
+                        "expected": expected_amount,
+                        "deposited": deposited_amount,
+                        "difference": difference,
+                        "notes": notes,
+                        "actor": actor_id,
+                        "key": idempotency_key,
+                    },
+                )
+                await self._session.execute(
+                    text(
+                        "INSERT INTO pos_deposit_shifts (company_id, deposit_id, shift_id, branch_id, "
+                        "amount) VALUES (:company, :deposit, :shift, :branch, :amount)"
+                    ),
+                    [
+                        {
+                            "company": company_id,
+                            "deposit": deposit_id,
+                            "shift": item.shift_id,
+                            "branch": branch_id,
+                            "amount": item.amount,
+                        }
+                        for item in shifts
+                    ],
+                )
         except IntegrityError as error:
             raise ConflictError(
                 "Uno de los turnos o la boleta ya se registraron en otro depósito.",
