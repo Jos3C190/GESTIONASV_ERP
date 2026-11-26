@@ -14,24 +14,25 @@
 ![Pytest](https://img.shields.io/badge/Pytest-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)
 ![OWASP ZAP](https://img.shields.io/badge/OWASP_ZAP-000000?style=for-the-badge&logo=owasp&logoColor=white)
 ![Trivy](https://img.shields.io/badge/Trivy-1904DA?style=for-the-badge&logo=trivy&logoColor=white)
-![Version](https://img.shields.io/badge/Version-2.0.0-green?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-2.1.0-green?style=for-the-badge)
 
 **GestionaSV** es un ERP multiempresa y multisucursal construido con
 **FastAPI + SvelteKit 5 + PostgreSQL 16**. Cubre el ciclo completo de
 abastecimiento de una cadena de tiendas: compras con retaceo de costos,
 inventario por lotes y ubicaciones, traslados entre sucursales con flota propia
-y seguimiento GPS, además de la base administrativa (usuarios, roles, bitácora,
-documentos y recursos humanos).
+y seguimiento GPS, y el ciclo de venta con facturación electrónica (DTE),
+cobros, devoluciones, libros de IVA y análisis comercial, además de la base
+administrativa (usuarios, roles, bitácora, documentos y recursos humanos).
 
 La empresa de demostración es **Grupo Lorena**, una cadena de panaderías de El
 Salvador con siete sucursales.
 
 | | |
 |---|---|
-| Módulos en operación | 38 de 40 entradas del menú |
-| Migraciones de base de datos | 118 |
-| Pruebas automatizadas | 1,723 de backend y 1,104 de frontend |
-| Área en construcción | Ventas y facturación electrónica (DTE) |
+| Módulos en operación | 48 de 49 entradas del menú |
+| Migraciones de base de datos | 145 |
+| Pruebas automatizadas | 2,117 de backend y 1,256 de frontend |
+| Área más reciente | Ventas y facturación electrónica (DTE) |
 
 ---
 
@@ -224,7 +225,7 @@ erp-system/
 │   │       ├── components/ui/  # Button, Card, Modal, Badge, Avatar, Sidebar
 │   │       ├── features/dashboard/  # KpiCard, AreaChart, DonutChart, etc.
 │   │       ├── stores/       # session, theme, permissions, search
-│   │       └── navigation.ts # menú lateral (38 módulos en operación + 2 pendientes)
+│   │       └── navigation.ts # menú lateral (48 módulos en operación + 1 pendiente)
 │   └── tests/                # vitest + testing-library
 └── nginx/                    # reverse proxy para prod
 ```
@@ -333,14 +334,20 @@ GitHub Actions: `ERP quality gate` (pruebas, lint, tipos y build) y
 
 | Módulo | Estado |
 |--------|--------|
-| Clientes, cotizaciones de venta, ventas, entregas y devoluciones | 🟡 Prototipo sin impuestos ni facturación; en rediseño |
-| Facturación electrónica (DTE), punto de venta, cobros y libros de IVA | 🔜 Planificado |
+| Clientes | ✅ Contribuyente o consumidor final, crédito, lista de precios y consentimiento de datos |
+| Listas de precios, topes de descuento y promociones | ✅ Vigencias, margen sobre costo, autorización y promoción por sucursal |
+| Cotizaciones y pedidos | ✅ Cálculo fiscal en el servidor, nunca bajo costo, salida de bodega al confirmar |
+| Facturación electrónica (DTE) | ✅ Multiemisor: factura, crédito fiscal, notas, remisión y retorno; contingencia e invalidación |
+| Cuentas por cobrar | ✅ Recibos, saldo a favor, retención, límite de crédito, mora y gestión de cobro |
+| Devoluciones | ✅ Nota de crédito o retorno automático, reintegro y cambio de producto |
+| Libros de IVA | ✅ Contribuyentes, consumidor final y compras; anexos del F-07 y cierre del mes |
+| Análisis comercial | ✅ Venta, margen, devoluciones y metas por sucursal, con permiso |
+| Punto de venta y caja | 🔜 Pospuesto |
 
 ### Pendientes en el menú
 
 | Módulo | Estado |
 |--------|--------|
-| Asignación de precios | Se construye con el área de Ventas |
 | Configuración | Pendiente |
 
 ---
@@ -357,17 +364,12 @@ no siembra datos.
 
 ## Hoja de ruta
 
-El siguiente bloque de trabajo es el área de **Ventas y facturación fiscal**
-para El Salvador:
+El área de Ventas quedó completa en la v2.1.0. Lo siguiente:
 
-1. Base fiscal: clientes con datos fiscales, catálogos de Hacienda y emisor por
-   empresa, sucursal y caja.
-2. Precios, impuestos y un nuevo modelo de cotización y pedido.
-3. Facturación electrónica (DTE) multiemisor: cada empresa emite sus propios
-   documentos, con modo simulado, de pruebas y de producción.
-4. Pedidos, cobros y cuentas por cobrar.
-5. Punto de venta y caja.
-6. Datos fiscales de compras, libros de IVA y anexos del F-07.
+1. Punto de venta y caja: venta de mostrador, turnos, arqueo y existencia de
+   vitrina (pospuesto; detalle en `PLAN.md`).
+2. Módulo de Configuración.
+3. Certificación de la facturación electrónica con Hacienda.
 
 ---
 
