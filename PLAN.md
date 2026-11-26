@@ -1168,10 +1168,16 @@ Pasos:
   (`hasOnlyPosModules`). Impresión 80 mm reutilizable: `print.ts` + `receipt.css`. vitest 1262 pasan.
 - [ ] **Paso 6: documentación, batería, QA y PR.** `docs/api.md`, `docs/database-schema.md`, manual del POS (parte de
   caja). Batería completa, QA en el navegador (claro, oscuro, 375 px) y PR con Auto-fix y auto-merge.
+  Avance: documentación hecha (`docs/api.md`, `docs/database-schema.md` §54, `docs/ers-v1/manual-pos.md`,
+  enlaces en manual-ventas y README). QA en el navegador como superadmin: crear caja, abrir turno con conteo,
+  entrada de efectivo, conteo ciego, revisión (su propio turno: «otro supervisor debe revisarlo»), modo claro y
+  oscuro, 375 px. Corregidos: encabezado de la caja en móvil y puntos de venta de otra sucursal en «Nueva caja».
+  Pendiente para V6f (con usuarios de demostración sembrados): QA en el navegador del cajero sin menú y de la
+  aprobación por otro supervisor (cubiertos por vitest y e2e). Falta: batería completa del backend y PR.
 
 ## Estado actual
 
-- **Paso en curso**: V6a paso 6 (documentación, batería, QA y PR), rama `feature/pos-v6a-cajas`. V9 completo en develop
+- **Paso en curso**: V6a paso 6: corre la batería del backend; luego PR a develop, rama `feature/pos-v6a-cajas`. V9 completo en develop
   (#69–#71) y versión v2.1.0 publicada (26/11/2026). El plan del POS (V6a–V6f) está arriba, con las decisiones del usuario.
   créditos fiscales—, cobros, 5 devoluciones, 1 cambio y la meta); 328 salidas de kardex en octubre; la segunda corrida
   no crea nada. Verificado en el navegador: análisis de octubre ($9,767.19 sin IVA, margen 32.68 %, devoluciones 1.96 %)
