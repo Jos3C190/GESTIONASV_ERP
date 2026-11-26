@@ -36,6 +36,7 @@ from app.application.fiscal_periods import FiscalPeriodUseCases
 from app.application.inventory import InventoryUseCases
 from app.application.inventory.kardex_read import InventoryKardexReadUseCases
 from app.application.password_policy import PasswordPolicy
+from app.application.pos.use_cases import PosUseCases
 from app.application.price_lists import PriceListUseCases
 from app.application.privacy import PrivacyUseCases
 from app.application.product_fiscal import ProductFiscalUseCases
@@ -304,6 +305,23 @@ def get_sales_receivable_use_cases(session: SessionDep) -> SalesReceivableUseCas
     )
 
     return SalesReceivableUseCases(SqlAlchemySalesReceivableRepository(session), _periods(session))
+
+
+def get_pos_use_cases(session: SessionDep) -> PosUseCases:
+    from app.core.security import hash_password, verify_password
+    from app.infrastructure.db import session as db_session
+    from app.infrastructure.repositories.pos_repository import (
+        SqlAlchemyPinAttempts,
+        SqlAlchemyPosRepository,
+    )
+
+    # La fábrica se lee al llamar: las pruebas la reemplazan por la de su base.
+    return PosUseCases(
+        SqlAlchemyPosRepository(session),
+        SqlAlchemyPinAttempts(db_session.async_session_factory, verify_password),
+        hash_pin=hash_password,
+        verify_password=verify_password,
+    )
 
 
 def get_fiscal_book_use_cases(session: SessionDep) -> FiscalBookUseCases:

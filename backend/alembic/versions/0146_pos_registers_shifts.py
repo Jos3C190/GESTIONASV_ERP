@@ -295,6 +295,14 @@ def upgrade() -> None:
             updated_at timestamptz NOT NULL DEFAULT now()
         );
 
+        -- Nombre visible de una persona en caja, tiquetes y cierres: su empleado o su usuario.
+        CREATE FUNCTION pos_user_name(p_user uuid) RETURNS text AS $$
+          SELECT COALESCE(
+            (SELECT e.first_name || ' ' || e.last_name FROM employees e
+             WHERE e.user_id = p_user AND e.deleted_at IS NULL ORDER BY e.created_at LIMIT 1),
+            (SELECT u.username FROM users u WHERE u.id = p_user))
+        $$ LANGUAGE sql STABLE;
+
         CREATE FUNCTION guard_pos_append_only() RETURNS trigger AS $$
         BEGIN
           RAISE EXCEPTION 'POS cash records are append-only' USING ERRCODE = '23514';
@@ -380,6 +388,7 @@ def downgrade() -> None:
     op.execute("""
         DROP FUNCTION guard_pos_append_only();
         DROP FUNCTION guard_pos_shift_closed();
+        DROP FUNCTION pos_user_name(uuid);
         ALTER TABLE fiscal_points_of_sale DROP CONSTRAINT uq_fiscal_points_of_sale_company_establishment;
         ALTER TABLE fiscal_establishments DROP CONSTRAINT uq_fiscal_establishments_company_id_branch;
     """)
