@@ -1025,9 +1025,131 @@ Pasos:
 - [x] **Paso 3: batería completa y PR.** Hecho: suite local 2114 pasan; `test_sales_deliveries` (rollback) falla a veces
   solo dentro de la suite completa y pasa sola (intermitente, no causado por V9c). PR #71 con Auto-fix y auto-merge.
 
+## V6 — Punto de venta y caja (decidido el 26/11/2026)
+
+El usuario retomó el POS pospuesto: «lo terminaremos por completo sin dejar nada pendiente… sin lógica suelta, huecos
+o errores». Pidió permisos propios, que un cajero vea **solo** el POS al entrar y tiquetes «estéticos y bonitos» con el
+cajero que atiende (según la cuenta usada), e investigar otros ERP.
+
+### Referencias revisadas
+- **Odoo 18 POS** (sesiones, apertura y cierre con control de efectivo, entradas y salidas con motivo, contador por
+  denominación, diferencia al cerrar, inicio de sesión por PIN, derechos básicos y avanzados, reembolso como nota de
+  crédito que referencia el tiquete, reimpresión desde Pedidos).
+- **ERPNext** (POS Profile con bodega, lista de precios, medios de pago, usuarios permitidos, «permitir editar
+  precio/descuento»; una sola sesión abierta por perfil; apertura y cierre por medio de pago).
+- **Square, Loyverse, Lightspeed** (pay in/pay out con descripción, informe X del turno en curso y Z al cerrar,
+  conteo por denominación, sobrante/faltante; cierre ciego como buena práctica).
+- **Hacienda** (Manual Funcional 2.0 §IV): la representación gráfica es de diseño libre, con los campos «A» de la
+  Normativa, correspondencia con el JSON y QR de consulta; la impresión es excepcional y la entrega preferente es
+  digital. Tiquetes prohibidos para emisores DTE desde el 1-ene-2025: el tiquete de 80 mm es **la factura (o el crédito
+  fiscal) en formato rollo**, no un comprobante aparte.
+- **Impresión térmica**: rollo de 80 mm con ~72 mm imprimibles (576 puntos a 203 ppp, 42–48 columnas); desde el
+  navegador con `@page { size: 80mm auto; margin: 0 }`, sin encabezados del navegador.
+- Plan de Ventas propio (`docs/plan_area_ventas_pdf.py`, módulo 4, §6.6 vitrina, §6.7 roles, §6.9 caja sin conexión).
+
+### Decisiones del usuario (26/11/2026)
+1. **Impresión**: diálogo del navegador con plantilla HTML de 80 mm, y el mismo tiquete en PDF 80 mm desde el servicio
+   DTE (correo, descarga, reimpresión). Sin agente instalado en la caja.
+2. **Medios de pago**: efectivo con vuelto, tarjeta (autorización y 4 últimos dígitos; sin integración con el
+   datáfono) y transferencia o QR bancario (referencia obligatoria). Sin vales.
+3. **Sin conexión**: opción A del plan: en línea contra el ERP; si Hacienda o el servicio DTE fallan, contingencia. Sin
+   nodo de tienda.
+4. **Vitrina por sucursal**: «pasar a vitrina» abre una unidad logística y la vuelve existencia suelta; la caja descuenta
+   por pieza a costo promedio, primero lo que vence antes; conteo de cierre con la merma como ajuste.
+5. **Roles**: Cajero (solo POS a pantalla completa) y Supervisor de tienda.
+6. **Cierre ciego + aprobación** del supervisor; un cierre aprobado no se modifica; luego el depósito bancario.
+7. **Documento**: factura a «Consumidor final» por defecto y crédito fiscal si el cliente es contribuyente (búsqueda por
+   NIT/NRC o alta rápida).
+8. **Anulaciones y devoluciones en caja**, siempre con supervisor, con las reglas de V8 (nota o retorno) y reintegro en
+   efectivo desde el turno.
+
+### Principio de diseño
+Una venta de caja **no es un circuito aparte**: en una sola transacción crea el pedido (canal `pos`, confirmado y
+entregado desde vitrina), su documento fiscal y su recibo de cobro ya aplicado. Así los libros de IVA, la cartera
+(saldo cero), el kardex, las devoluciones de V8 y el análisis comercial funcionan sin código paralelo. Lo propio del POS
+es: caja, turno, efectivo, vitrina, pantalla y tiquete.
+
+### Modelo
+- **Caja** (`pos_registers`): sucursal, punto de venta fiscal (uno a uno, `fiscal_points_of_sale`), ubicación de
+  vitrina, nombre, fondo sugerido, activa. Solo se usa con establecimiento y documento 01 habilitados.
+- **Turno** (`pos_shifts`): caja, cajero (usuario), abierto/en cierre/cerrado/aprobado; fondo inicial contado por
+  denominación; una sola caja por turno y un solo turno abierto por caja y por cajero. No se vende sin turno abierto a
+  nombre de quien vende.
+- **Movimientos de efectivo** (`pos_cash_movements`): entrada, salida (con motivo y, sobre un monto, supervisor),
+  retiro parcial a caja fuerte, vuelto, reintegro; inmutables.
+- **Arqueo** (`pos_shift_counts`): por denominación (USD: 0.01, 0.05, 0.10, 0.25, 1 moneda; 1, 5, 10, 20, 50, 100
+  billete) y totales declarados de tarjeta y transferencia; esperado calculado en el servidor; diferencia; aprobación
+  con motivo si no cuadra; depósito con boleta y evidencia.
+- **Venta de caja** (`pos_sales`): enlaza turno, pedido, documento fiscal y recibo; idempotente por clave de la caja;
+  pagos múltiples con vuelto solo en efectivo.
+- **Vitrina**: ubicación tipo vitrina por sucursal; «pasar a vitrina» mueve la unidad logística y la marca abierta;
+  la venta descuenta parcialmente esa unidad (FEFO) con salida al costo promedio en el kardex; conteo de cierre que
+  genera un ajuste de merma aprobado.
+- **Autorización de supervisor en caja**: PIN de supervisor (Argon2id, bloqueo por intentos) para descuentos fuera de
+  tope, salidas grandes, anulación, devolución y reimpresiones fuera del turno; cada uso queda en la bitácora con quién
+  autorizó.
+
+### Permisos (migración + `rbac/catalogue.py`)
+`pos:sell`, `pos:shift_open`/`pos:shift_close` (su propio turno), `pos:cash_movements`, `pos:reprint`,
+`pos:supervise` (autorizar en caja, aprobar cierres, ver turnos de la sucursal), `pos:registers_manage` (cajas),
+`pos:showcase` (pasar a vitrina, conteo de vitrina), `pos:reports` (informes X/Z y por cajero). Roles base **CAJERO**
+(sell, shift_open, shift_close, cash_movements, reprint) y **SUPERVISOR_TIENDA**.
+
+### Experiencia
+- Un usuario cuyo único módulo es el POS entra directo a `/pos` a pantalla completa (sin barra lateral), con su nombre,
+  caja, turno y botón de salir; el menú solo muestra lo que su rol permite.
+- Pantalla táctil: búsqueda por nombre o código y lector de código de barras, favoritos por categoría, teclado
+  numérico, carrito con cantidades, cliente (consumidor final o contribuyente), cobro mixto con billetes rápidos y
+  vuelto, atajos de teclado; estados de carga, vacío y error.
+- Tiquete: logo y datos del emisor y establecimiento, tipo de documento, código de generación, número de control,
+  sello o «en contingencia», fecha y hora de El Salvador, caja, **cajero**, cliente, líneas, descuentos, gravado/exento,
+  IVA, total, medios de pago, vuelto, total en letras, QR de consulta y leyenda; modo claro sobre papel, monocromo.
+
+### Bloques (una PR cada uno)
+- **V6a — Cajas, turnos, efectivo y roles**: modelo y API de cajas, turnos, movimientos, arqueo ciego, aprobación,
+  depósito; permisos y roles; PIN de supervisor; espacio de trabajo del cajero; informes X/Z.
+- **V6b — Vitrina**: ubicación de vitrina, pasar a vitrina, descuento parcial por pieza, conteo de cierre y merma.
+- **V6c — Venta de mostrador**: pantalla del POS, motor de precios compartido, cobro mixto, venta atómica (pedido +
+  DTE + recibo), contingencia, crédito fiscal en caja.
+- **V6d — Tiquete de 80 mm**: plantilla HTML de impresión y PDF 80 mm en el servicio DTE, reimpresión y correo.
+- **V6e — Anulación y devoluciones en caja**: invalidación de la venta del turno, devolución de una venta anterior con
+  nota o retorno, reintegro en efectivo que entra al arqueo.
+- **V6f — Cierre del bloque**: datos de demostración (cajas y turnos de Grupo Lorena), manual del POS, prueba integral
+  turno → ventas → devolución → arqueo → libro de IVA, QA en el navegador (claro, oscuro, 375 px y ancho de caja).
+
+Cada bloque se detalla en pasos al empezarlo, con sus pruebas (pytest, vitest, servicio DTE) y documentación
+(`docs/api.md`, `docs/database-schema.md`, manuales).
+
+### V6a — Cajas, turnos, efectivo y roles (rama `feature/pos-v6a-cajas`)
+
+El esperado del arqueo se calcula desde el inicio con todas sus fuentes (fondo, entradas, salidas, retiros, ventas en
+efectivo menos vuelto, reintegros); las ventas y los reintegros valen cero hasta V6c y V6e.
+
+Pasos:
+- [x] **Paso 0: plan y rama.**
+- [ ] **Paso 1: migración 0146 y modelos.** Tablas `pos_registers`, `pos_shifts`, `pos_cash_movements`,
+  `pos_shift_counts` (con renglones por denominación), `pos_shift_deposits`, `pos_supervisor_pins`; permisos `pos:*` y
+  roles CAJERO y SUPERVISOR_TIENDA; restricciones (un turno abierto por caja y por cajero, montos y estados válidos,
+  inmutabilidad de lo aprobado); guarda de downgrade. Verificar: prueba de migración (sube, baja, guarda).
+- [ ] **Paso 2: dominio.** Estados del turno y transiciones, cálculo del esperado y la diferencia, denominaciones USD,
+  reglas de movimientos y de aprobación. Verificar: unitarias.
+- [ ] **Paso 3: repositorios y casos de uso.** Abrir turno con conteo, entradas/salidas/retiros (supervisor sobre el
+  tope de la caja), cierre ciego, aprobación o recuento, depósito, informes X y Z; PIN de supervisor (definir el propio,
+  verificar con bloqueo tras 5 intentos fallidos durante 15 min). Verificar: integración (concurrencia de apertura,
+  idempotencia, inmutabilidad).
+- [ ] **Paso 4: API, RBAC y auditoría.** Routers `/pos/registers`, `/pos/shifts`, `/pos/me` con
+  `require_permission`, alcance por sucursal y bitácora en toda escritura. Verificar: e2e (permisos, sucursal ajena,
+  cierre ciego no expone el esperado al cajero).
+- [ ] **Paso 5: interfaz.** Configuración de cajas; espacio del cajero en `/pos` a pantalla completa y entrada directa
+  para quien solo tiene el POS; abrir turno, movimientos, cierre ciego; panel del supervisor (turnos de la sucursal,
+  aprobar, depósito); informe X/Z imprimible. Verificar: vitest; svelte-check y lint.
+- [ ] **Paso 6: documentación, batería, QA y PR.** `docs/api.md`, `docs/database-schema.md`, manual del POS (parte de
+  caja). Batería completa, QA en el navegador (claro, oscuro, 375 px) y PR con Auto-fix y auto-merge.
+
 ## Estado actual
 
-- **Paso en curso**: ninguno. V9 completo: V9a #69 y V9b #70 en develop; V9c en PR #71 (auto-merge).
+- **Paso en curso**: V6a paso 1 (migración de cajas y turnos), rama `feature/pos-v6a-cajas`. V9 completo en develop
+  (#69–#71) y versión v2.1.0 publicada (26/11/2026). El plan del POS (V6a–V6f) está arriba, con las decisiones del usuario.
   créditos fiscales—, cobros, 5 devoluciones, 1 cambio y la meta); 328 salidas de kardex en octubre; la segunda corrida
   no crea nada. Verificado en el navegador: análisis de octubre ($9,767.19 sin IVA, margen 32.68 %, devoluciones 1.96 %)
   y libros de IVA de octubre. Batería de inventario tras la corrección de capacidad: 567 pasan. Sigue V9c (manual
