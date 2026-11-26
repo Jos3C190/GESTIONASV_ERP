@@ -1208,8 +1208,10 @@ Pasos:
   Hecho: `0147_pos_showcase.py`, modelos en `models/pos.py` e `inventory.py`, `test_pos_showcase_migration.py`.
   La ubicación de vitrina no se cambia de tipo ni se retira en uso (disparador `guard_pos_showcase_location`);
   el módulo de ubicaciones avisa `location_managed_by_pos`. Etiqueta «Vitrina del punto de venta» en el frontend.
-- [ ] **Paso 2: motor de inventario.** Salida parcial en su lugar desde unidad abierta en vitrina; el resto de las
+- [x] **Paso 2: motor de inventario.** Salida parcial en su lugar desde unidad abierta en vitrina; el resto de las
   reglas intactas. Verificar: integración (parcial, cierre en cero, valoración, rechazo fuera de vitrina).
+  Hecho: `showcase_issue` en `post_movement` (unidad con `opened_at` en ubicación `showcase`, `shipment` o
+  `adjustment_out`) usa la rama de salida parcial en su lugar. e2e `test_pos_showcase_engine.py` pasa.
 - [ ] **Paso 3: casos de uso y API.** Crear vitrina, existencias de vitrina, candidatas en bodega, pasar a vitrina,
   consumo FEFO, conteo y merma; permisos (`pos:registers_manage`, `pos:showcase`, `pos:sell` para consultar) y
   bitácora. Verificar: unitarias y e2e.
@@ -1219,7 +1221,7 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: V6b paso 2 (motor de inventario). V6a en develop (#73, 26/11/2026)., rama `feature/pos-v6a-cajas`. V9 completo en develop
+- **Paso en curso**: V6b paso 3 (casos de uso y API de vitrina). V6a en develop (#73, 26/11/2026)., rama `feature/pos-v6a-cajas`. V9 completo en develop
   (#69–#71) y versión v2.1.0 publicada (26/11/2026). El plan del POS (V6a–V6f) está arriba, con las decisiones del usuario.
   créditos fiscales—, cobros, 5 devoluciones, 1 cambio y la meta); 328 salidas de kardex en octubre; la segunda corrida
   no crea nada. Verificado en el navegador: análisis de octubre ($9,767.19 sin IVA, margen 32.68 %, devoluciones 1.96 %)
