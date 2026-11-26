@@ -1428,3 +1428,15 @@ Revision `0142` (revises `0141`), block V8a.
 
 **Downgrade** refuses while adjustments or refunds exist. Covered by
 `backend/tests/integration/test_sales_return_fiscal_migration.py`.
+
+## 51. Product exchange (0143)
+
+Revision `0143` (revises `0142`), block V8b1.
+
+- `sales.exchange_return_id`: the return (B08) this order exchanges for another product; composite FK
+  `fk_sales_exchange_return` to `sales_returns (company_id, id)`.
+- `uq_sales_exchange_return_active`: unique `(company_id, exchange_return_id)` while the order is not
+  cancelled, so a return is exchanged once.
+
+**Downgrade** refuses while exchange orders exist. Covered by
+`backend/tests/integration/test_sales_exchange_migration.py`.

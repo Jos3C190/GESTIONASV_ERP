@@ -125,6 +125,33 @@ describe('SalesReturnsPanel', () => {
     });
   });
 
+  it('ofrece el cambio de producto de lo aceptado y enlaza el pedido de cambio', async () => {
+    permissions.set(['sales_returns:read', 'sales:manage'], false);
+    const accepted = returnDocument('accepted');
+    accepted.lines[0]!.quantity_accepted_base = '1.000000';
+    salesApi.returnsForSale.mockResolvedValue([accepted]);
+    const view = setup();
+
+    const link = await screen.findByRole('link', { name: 'Cambiar por otro producto' });
+    const href = new URL(link.getAttribute('href') ?? '', 'http://localhost');
+    expect(href.pathname).toBe('/sales/new');
+    expect(href.searchParams.get('exchange_return')).toBe('return-1');
+    expect(href.searchParams.get('code')).toBe('DEV-20261019-ABCDEF12');
+    view.unmount();
+
+    salesApi.returnsForSale.mockResolvedValue([
+      { ...accepted, exchange_orders: [{ id: 'sale-9', code: 'PED-9', status: 'draft' }] }
+    ]);
+    setup();
+    expect(await screen.findByRole('link', { name: 'PED-9' })).toHaveAttribute(
+      'href',
+      '/sales/sale-9'
+    );
+    expect(
+      screen.queryByRole('link', { name: 'Cambiar por otro producto' })
+    ).not.toBeInTheDocument();
+  });
+
   it('muestra el ajuste fiscal emitido y el motivo cuando no se emitió', async () => {
     permissions.set(['sales_returns:read'], false);
     salesApi.returnsForSale.mockResolvedValue([

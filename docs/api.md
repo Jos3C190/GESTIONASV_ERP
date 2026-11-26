@@ -2528,3 +2528,14 @@ Audited: `REGISTER_SALES_REFUND`, `ANNUL_SALES_REFUND`. Errors (`422`): `sales_r
 `sales_refund_date_invalid`, `sales_refund_key_invalid`, `sales_refund_annulled`,
 `sales_receipt_annulled`; `sales_refund_key_conflict` (`409`); `sales_refund_not_found`,
 `sales_receipt_not_found` (`404`).
+
+## Product exchange (revision 0143, block V8b1)
+
+An exchange is an accepted return (with its V8a credit note or return event) plus a new order for the
+replacement. `POST /sales` and `PUT /sales/{id}` accept `exchange_return_id`: the return must belong to the
+company and the same customer, have accepted goods, and have no other non-cancelled exchange order —
+`sales_exchange_return_not_found` (`404`), `sales_exchange_customer_mismatch`,
+`sales_exchange_return_not_accepted`, `sales_exchange_return_taken` (`422`). The preview ignores the link.
+`OrderOut` gains `exchange_return_id` and `exchange_return_code`; every return payload gains
+`exchange_orders` (`id`, `code`, `status`). The customer's credit is applied to the exchange document with
+`POST /sales/receipts/{id}/apply`.

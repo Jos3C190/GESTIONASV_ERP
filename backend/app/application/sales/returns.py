@@ -1160,6 +1160,16 @@ class SalesReturnService:
                 for document_id, title, file_name in evidence_rows
             ],
             "lines": output_lines,
+            "exchange_orders": [
+                dict(row._mapping)
+                for row in await self.session.execute(
+                    text(
+                        "SELECT id, code, status FROM sales WHERE company_id = :company_id "
+                        "AND exchange_return_id = :return_id ORDER BY created_at, id"
+                    ),
+                    {"company_id": company_id, "return_id": return_id},
+                )
+            ],
             "fiscal_adjustments": [
                 dict(row._mapping)
                 for row in await self.session.execute(

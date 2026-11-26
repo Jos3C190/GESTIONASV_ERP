@@ -117,6 +117,8 @@ def _out(view: OrderView, costs_visible: bool) -> OrderOut:
         customer_name=view.customer.draft.name,
         quotation_id=order.quotation_id,
         quotation_code=view.quotation_code,
+        exchange_return_id=order.exchange_return_id,
+        exchange_return_code=view.exchange_return_code,
         code=order.code,
         document_type=order.document_type,  # type: ignore[arg-type]
         price_list_id=order.price_list_id,
@@ -173,6 +175,7 @@ def _state(order: Order) -> dict[str, Any]:
         "customer_id": str(order.customer_id),
         "branch_id": str(order.branch_id),
         "quotation_id": str(order.quotation_id) if order.quotation_id else None,
+        "exchange_return_id": str(order.exchange_return_id) if order.exchange_return_id else None,
         "document_type": order.document_type,
         "promised_date": order.promised_date.isoformat(),
         "delivery_mode": order.delivery_mode.value,
@@ -239,6 +242,7 @@ def _draft(body: OrderDraftIn) -> OrderDraft:
         document_type=body.document_type,
         global_discount_percent=body.global_discount_percent,
         notes=body.notes,
+        exchange_return_id=body.exchange_return_id,
         delivery=_delivery(body),
         lines=tuple(
             DraftLine(

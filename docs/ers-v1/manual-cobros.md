@@ -121,3 +121,20 @@ cliente: fecha (no futura), monto (hasta el saldo a favor), forma (todas salvo e
 referencia) y motivo. Recibe un número correlativo (RI-000001), no es un documento tributario y
 queda en la bitácora. Si el reintegro no se concretó (transferencia rechazada, el cliente no lo
 retiró), **Anular reintegro** con motivo devuelve el saldo a favor al recibo.
+
+## 9. Cambio de producto (V8b1)
+
+Cuando el cliente devuelve un artículo y se lleva otro, el cambio se hace en dos documentos: la
+**devolución** (con su nota de crédito o evento de retorno, §8) y un **pedido nuevo** con el producto de
+reemplazo. Así queda bien aunque el documento original ya esté declarado.
+
+1. En la devolución aceptada, **Cambiar por otro producto** abre el pedido nuevo con el mismo cliente (fijo)
+   y la sucursal; un aviso recuerda de qué devolución es.
+2. El pedido de cambio sigue el camino de siempre: precios, impuestos, crédito, salida de existencias y
+   factura o crédito fiscal.
+3. Al cobrar su documento, la sección **Cobro** muestra el **saldo a favor** del cliente (por ejemplo, lo que
+   liberó la nota de la devolución) y **Aplicar** lo usa hasta el saldo del documento. Si el cambio cuesta
+   más, la diferencia se cobra como siempre; si cuesta menos, el resto sigue como saldo a favor o se reintegra.
+
+Una devolución se cambia una sola vez mientras su pedido de cambio esté vigente; si ese pedido se cancela,
+la devolución vuelve a quedar libre. El pedido y la devolución se enlazan entre sí.
