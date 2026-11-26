@@ -4,7 +4,7 @@
   import { HttpError } from '#lib/api/client.ts';
   import { salesReceivablesApi } from '#lib/api/sales-receivables.ts';
   import ReceiptForm from '#lib/features/sales-receivables/ReceiptForm.svelte';
-  import { todayLocal } from '#lib/features/sales-receivables/labels.ts';
+  import { fromCents, sumCents, todayLocal } from '#lib/features/sales-receivables/labels.ts';
   import { formatDay, formatMoney } from '#lib/features/sales/quotation-labels.ts';
   import type { AccountDocument, Receipt } from '#lib/types/sales-receivables.ts';
 
@@ -23,6 +23,46 @@
   let certificateDate = $state(todayLocal());
   let certificateAmount = $state('');
   let certificateError = $state<string | null>(null);
+  /** Recibos del cliente con saldo a favor (V8b1: p. ej. lo que liberó una devolución). */
+  let credits = $state<Receipt[]>([]);
+  let applyError = $state<string | null>(null);
+  let applying = $state(false);
+
+  function applicable(receipt: Receipt): string {
+    if (!receivable) return '0.00';
+    return fromCents(Math.min(sumCents([receipt.unapplied]), sumCents([receivable.balance])));
+  }
+
+  async function loadCredits() {
+    credits = [];
+    if (!canCollect || !receivable || Number(receivable.balance) <= 0) return;
+    try {
+      const account = await salesReceivablesApi.account(receivable.customer_id);
+      credits = account.receipts.filter(
+        (item) => item.status === 'issued' && Number(item.unapplied) > 0
+      );
+    } catch {
+      // El saldo a favor es una ayuda: si no carga, el cobro normal sigue disponible.
+      credits = [];
+    }
+  }
+
+  async function applyCredit(receipt: Receipt) {
+    if (!receivable) return;
+    applying = true;
+    applyError = null;
+    const amount = applicable(receipt);
+    try {
+      await salesReceivablesApi.apply(receipt.id, [{ document_id: receivable.id, amount }]);
+      notice = `Se aplicó ${formatMoney(amount)} del saldo a favor del recibo ${receipt.code}.`;
+      await load();
+    } catch (cause) {
+      applyError =
+        cause instanceof HttpError ? cause.message : 'No se pudo aplicar el saldo a favor.';
+    } finally {
+      applying = false;
+    }
+  }
 
   async function load() {
     loading = true;
@@ -30,6 +70,7 @@
     try {
       receivable = await salesReceivablesApi.document(documentId);
       certificateAmount = receivable.withholding;
+      await loadCredits();
     } catch (cause) {
       receivable = null;
       loadError =
@@ -114,6 +155,30 @@
         </dd>
       </div>
     </dl>
+    {#if credits.length && Number(receivable.balance) > 0}
+      <div
+        class="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm"
+        aria-label="Saldo a favor del cliente"
+      >
+        <p class="font-medium text-foreground">El cliente tiene saldo a favor</p>
+        {#if applyError}
+          <p class="text-danger" role="alert">{applyError}</p>
+        {/if}
+        {#each credits as item (item.id)}
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <span class="text-foreground-muted"
+              >{item.code} · saldo a favor {formatMoney(item.unapplied)}</span
+            >
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={applying}
+              onclick={() => applyCredit(item)}>Aplicar {formatMoney(applicable(item))}</Button
+            >
+          </div>
+        {/each}
+      </div>
+    {/if}
     {#if collecting}
       <ReceiptForm
         customerId={receivable.customer_id}

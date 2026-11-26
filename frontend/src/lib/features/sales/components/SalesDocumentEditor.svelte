@@ -18,6 +18,7 @@
   import type { Customer } from '#lib/types/customer.ts';
   import { todayInElSalvador } from '#lib/features/price-lists/labels.ts';
   import type {
+    OrderExchange,
     OrderDraftInput,
     QuotationDraftInput,
     Sale,
@@ -37,8 +38,14 @@
   /** Editor común: cotización (V2d) o pedido (V2e). */
   let {
     kind = 'quotation',
-    documentId = null
-  }: { kind?: 'quotation' | 'order'; documentId?: string | null } = $props();
+    documentId = null,
+    exchange = null
+  }: {
+    kind?: 'quotation' | 'order';
+    documentId?: string | null;
+    /** Pedido nuevo que cambia una devolución aceptada por otro producto (V8b1). */
+    exchange?: OrderExchange | null;
+  } = $props();
   const isOrder = $derived(kind === 'order');
   const noun = $derived(kind === 'order' ? 'pedido' : 'cotización');
   const listPath = $derived(kind === 'order' ? '/sales' : '/sales/quotations');
@@ -48,6 +55,8 @@
   let branches = $state(branch.branches.filter((item) => item.is_active));
   let branchId = $state(branch.id ?? '');
   let customerId = $state('');
+  let exchangeReturnId = $state('');
+  let exchangeCode = $state('');
   let documentType = $state<'' | '01' | '03'>('');
   let validUntil = $state('');
   let globalDiscount = $state('0');
@@ -112,6 +121,12 @@
       if (!isOrder) {
         validityDays = (await salesApi.quotationSettings()).quotation_validity_days;
       }
+      if (exchange && isOrder && !documentId) {
+        branchId = exchange.branchId;
+        customerId = exchange.customerId;
+        exchangeReturnId = exchange.returnId;
+        exchangeCode = exchange.code;
+      }
       if (documentId) {
         const document = isOrder
           ? await salesApi.sale(documentId)
@@ -124,6 +139,10 @@
         globalDiscount = document.global_discount_percent;
         notes = document.notes ?? '';
         if ('valid_until' in document) validUntil = document.valid_until;
+        if ('exchange_return_id' in document && document.exchange_return_id) {
+          exchangeReturnId = document.exchange_return_id;
+          exchangeCode = document.exchange_return_code ?? '';
+        }
         if ('promised_date' in document) {
           promisedDate = document.promised_date;
           deliveryMode = document.delivery_mode;
@@ -184,7 +203,8 @@
         ...common,
         promised_date: promisedDate,
         delivery_mode: deliveryMode,
-        delivery_address_id: deliveryMode === 'delivery' ? addressId : null
+        delivery_address_id: deliveryMode === 'delivery' ? addressId : null,
+        exchange_return_id: exchangeReturnId || null
       };
     }
     return { ...common, valid_until: validUntil || null };
@@ -340,6 +360,16 @@
     </section>
   {:else}
     <form class="space-y-5" onsubmit={save}>
+      {#if exchangeReturnId}
+        <p
+          class="rounded-lg border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-foreground"
+          role="note"
+        >
+          <span class="font-medium">Cambio de producto</span> de la devolución
+          <span class="font-mono">{exchangeCode}</span>: el cliente se lleva lo de este pedido. El
+          saldo a favor que dejó la devolución se aplica al cobrar su documento.
+        </p>
+      {/if}
       <section
         class="grid gap-4 rounded-xl border border-border bg-surface p-5 sm:grid-cols-2 lg:grid-cols-3"
       >
@@ -352,6 +382,7 @@
               customerId = event.currentTarget.value;
               documentType = '';
             }}
+            disabled={!!exchangeReturnId}
             required
           >
             <option value="">Selecciona un cliente</option>

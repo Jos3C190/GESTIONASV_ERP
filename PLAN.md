@@ -845,7 +845,44 @@ Pasos:
   transferencia (pide referencia) y su anulación devuelve el saldo a favor; devolución de un pedido con CCF
   fallido → «Sin ajuste fiscal: El pedido no está facturado…». Modo claro y 375 px sin scroll horizontal.
 
-### V8b — Cambio de producto e invalidación tipo 3, cierre de período (se detalla al terminar V8a)
+### V8b — Cambio de producto y cierre de período (decidido el 25/11/2026)
+
+Decisiones del usuario (25/11/2026), tras mezclar V8a (#65) y la corrección del DTE (#66):
+- **V8b completo**, en dos PR: V8b1 (cambio de producto) y V8b2 (cierre de período). Después sigue V9.
+- **Cambio de producto = devolución + venta nueva** (no invalidación tipo 3): se acepta la devolución (sale la nota o el
+  retorno de V8a) y se crea un pedido nuevo vinculado con el producto de reemplazo; el saldo a favor se aplica al
+  documento de ese pedido. Vale aunque el documento original ya esté declarado.
+
+#### V8b1 — Cambio de producto (rama `feature/ventas-v8b1-cambio`)
+
+Diseño:
+- **Vínculo**: `sales.exchange_return_id` (FK compuesta a `sales_returns`); a lo sumo un pedido de cambio no cancelado
+  por devolución (índice único parcial). El pedido de cambio es un pedido normal: precios, impuestos, crédito, salida
+  automática y facturación de siempre.
+- **Reglas** al crear o editar el borrador: la devolución es de la misma empresa y del mismo cliente, tiene cantidad
+  aceptada, y no tiene otro pedido de cambio vigente. Códigos: `sales_exchange_return_not_found`,
+  `sales_exchange_customer_mismatch`, `sales_exchange_return_not_accepted`, `sales_exchange_return_taken`.
+- **Salidas**: el pedido trae `exchange_return_id` y `exchange_return_code`; la devolución trae `exchange_orders`.
+- **Saldo a favor**: el panel «Cobro» del documento fiscal ofrece aplicar el saldo a favor de los recibos del cliente
+  (usa `POST /sales/receipts/{id}/apply`, que ya existe). Sirve para el cambio y para cualquier documento.
+
+Pasos:
+- [x] **Paso 0: plan y rama.**
+- [x] **Paso 1: migración 0143, servicio de pedidos y API.** Columna, índice, validación en borrador y edición,
+  salidas del pedido y de la devolución. Verificar: prueba de migración y e2e (cambio válido, cliente distinto, sin
+  aceptar, devolución ya tomada; el pedido de cambio se factura y se le aplica el saldo a favor).
+- [x] **Paso 2: interfaz.** «Cambiar por otro producto» en la devolución aceptada abre el pedido nuevo con cliente y
+  sucursal; aviso del cambio en el editor y enlaces en el pedido y en la devolución; aplicar saldo a favor en el panel
+  Cobro. Verificar: vitest.
+- [x] **Paso 3: documentación, verificación y PR.** Manual de cobros §9, `api.md` y esquema §51; e2e
+  `test_sales_exchange.py`, prueba de migración, suites de pedidos, entregas, devoluciones y unitarias (1507 pasan);
+  vitest; QA en el navegador.
+
+#### V8b2 — Cierre de período (se detalla al terminar V8b1)
+
+Idea: cerrar un mes por empresa (permiso propio, auditado); en un mes cerrado no se registran ni anulan recibos,
+reintegros ni comprobantes de retención con fecha de ese mes, no se editan los datos fiscales de sus compras ni se
+invalidan sus documentos; reabrir pide motivo; los libros del mes muestran «Cerrado».
 
 ## Corrección: multipleOf del servicio DTE (rama `feature/dte-multipleof-precision`, 25/11/2026)
 
@@ -866,9 +903,10 @@ los decimales de la representación más corta del número (la misma que va en e
 
 ## Estado actual
 
-- **Paso en curso**: corrección de multipleOf del servicio DTE (sección propia arriba); pasos 1 y 2 hechos, en
-  PR a develop. El contenedor `dte-service` tiene el validador copiado a mano: tras el merge, reconstruirlo con
-  `docker compose up -d --build dte-service` para que la imagen lo traiga. Las pruebas del servicio corren sin
+- **Paso en curso**: V8b1 en PR; sigue V8b2 (cierre de período, se detalla al empezar). La vista previa del pedido ignora
+  `exchange_return_id` (solo se valida al guardar, con el id del pedido que se edita). QA del 25/11: PED-20261125-F4596AE0
+  cambia DEV-20261126-A30FE3F7 y se le aplicó $34.66 del saldo a favor de RC-000003. V8a en develop (#65) y
+  multipleOf del DTE corregido en develop (#66); la imagen de `dte-service` se reconstruyó tras el merge. Las pruebas del servicio corren sin
   `node_modules` local (better-sqlite3 no compila en Windows) montando `src` y `test` en la imagen:
   `MSYS_NO_PATHCONV=1 docker run --rm -v "<ruta>\dte-service\src:/app/src" -v "<ruta>\dte-service\test:/app/test" -w /app proyecto_erp-dte-service npm test`.
 - **V8a**: en develop (#65); pasos 1 a 5 hechos (ajuste fiscal al aceptar en `return_fiscal.py`) (reintegros `RI-000001` en `/sales/receipts/{id}/refunds`; e2e `test_sales_refunds.py`) (0142 en desarrollo, `sales_return_fiscal.py`). V5 completo en develop (#63, #64).

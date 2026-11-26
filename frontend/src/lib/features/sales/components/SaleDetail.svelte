@@ -194,6 +194,10 @@
         <h1 class="mt-1 text-2xl font-bold text-foreground">{sale.customer_name}</h1>
         <p class="mt-1 text-sm text-foreground-muted">
           {sale.customer_code}{branchName ? ` · ${branchName}` : ''}
+          {#if sale.exchange_return_id}
+            · Cambio de la devolución
+            <span class="font-mono text-foreground">{sale.exchange_return_code}</span>
+          {/if}
           {#if sale.quotation_id}
             · Origen:
             <a

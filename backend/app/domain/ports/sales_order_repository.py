@@ -8,7 +8,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Protocol
 
-from app.domain.entities.sales_order import DeliveryMode, OrderStatus, PaymentTerms
+from app.domain.entities.sales_order import DeliveryMode, ExchangeSource, OrderStatus, PaymentTerms
 from app.domain.ports.sales_document import DocumentLine, DocumentTotals, LineIdentity
 from app.domain.ports.sales_quotation_repository import PeopleNames
 
@@ -46,6 +46,7 @@ class Order:
     credit_days: int
     created_by_id: uuid.UUID
     quotation_id: uuid.UUID | None = None
+    exchange_return_id: uuid.UUID | None = None
     lines: list[OrderLine] = field(default_factory=list)
     confirmed_by_id: uuid.UUID | None = None
     confirmed_at: datetime | None = None
@@ -102,6 +103,12 @@ class SalesOrderRepository(Protocol):
     async def for_quotation(
         self, company_id: uuid.UUID, quotation_id: uuid.UUID
     ) -> Order | None: ...
+
+    async def exchange_source(
+        self, company_id: uuid.UUID, return_id: uuid.UUID, *, exclude_order: uuid.UUID | None
+    ) -> ExchangeSource | None:
+        """La devolución que se cambia, con lo aceptado y el otro pedido de cambio vigente."""
+        ...
 
     async def delivery_address(
         self, company_id: uuid.UUID, customer_id: uuid.UUID, address_id: uuid.UUID

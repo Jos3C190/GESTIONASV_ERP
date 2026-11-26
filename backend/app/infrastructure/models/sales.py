@@ -571,6 +571,8 @@ class SaleModel(UUIDPKMixin, TimestampMixin, Base):
     branch_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     customer_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     quotation_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    exchange_return_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    """V8b1: devolución que este pedido cambia por otro producto."""
     code: Mapped[str] = mapped_column(String(48), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, server_default="USD")
     subtotal: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
@@ -640,6 +642,19 @@ class SaleModel(UUIDPKMixin, TimestampMixin, Base):
             ["sales_quotations.company_id", "sales_quotations.id"],
             ondelete="RESTRICT",
             name="fk_sales_source_quotation_company",
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "exchange_return_id"],
+            ["sales_returns.company_id", "sales_returns.id"],
+            ondelete="RESTRICT",
+            name="fk_sales_exchange_return",
+        ),
+        Index(
+            "uq_sales_exchange_return_active",
+            "company_id",
+            "exchange_return_id",
+            unique=True,
+            postgresql_where=text("exchange_return_id IS NOT NULL AND status <> 'cancelled'"),
         ),
         ForeignKeyConstraint(
             ["created_by_id", "company_id"],

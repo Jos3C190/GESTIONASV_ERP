@@ -93,6 +93,12 @@ class ReturnFiscalAdjustmentOut(BaseModel):
     created_at: datetime
 
 
+class ReturnExchangeOrderOut(BaseModel):
+    id: uuid.UUID
+    code: str
+    status: str
+
+
 class SalesReturnOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -113,6 +119,7 @@ class SalesReturnOut(BaseModel):
     evidence: list[SalesReturnEvidenceOut] = Field(default_factory=list)
     lines: list[SalesReturnLineOut]
     fiscal_adjustments: list[ReturnFiscalAdjustmentOut] = Field(default_factory=list)
+    exchange_orders: list[ReturnExchangeOrderOut] = Field(default_factory=list)
 
 
 class SalesReturnableAllocationOut(BaseModel):
