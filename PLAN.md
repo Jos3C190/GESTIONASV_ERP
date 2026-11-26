@@ -960,9 +960,10 @@ Pasos:
   prueba de migración y unitarias.
 - [x] **Paso 2: consulta del análisis y API.** `GET /sales/analytics`, `GET/PUT /sales/goals/{period}`. Verificar: e2e
   (cifras sin IVA, costo oculto sin permiso, alcance por sucursal, metas).
-- [ ] **Paso 3: interfaz.** Página «Ventas → Análisis», editor de metas e indicadores en el Dashboard con permiso.
+- [x] **Paso 3: interfaz.** Página «Ventas → Análisis», editor de metas e indicadores en el Dashboard con permiso.
   Verificar: vitest.
-- [ ] **Paso 4: documentación, verificación y PR.**
+- [x] **Paso 4: documentación, verificación y PR.** `manual-analisis-comercial.md`, `api.md`, esquema §53; unitarias,
+  migración y e2e del análisis, RBAC y unitarias (1515), vitest completo (1256); QA: análisis de noviembre y Dashboard.
 
 ### V9b — Datos de demostración (se detalla al terminar V9a)
 
@@ -970,8 +971,7 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: V9a paso 3 (interfaz: Ventas → Análisis, metas y Dashboard con permiso); pasos 1 y 2 hechos
-  (`/sales/analytics`, `/sales/goals/{period}`, migración 0145). V8 completo en develop (#65, #67, #68).
+- **Paso en curso**: V9a en PR; sigue V9b (datos de demostración, se detalla al empezar).
 - **V8a**: en develop (#65); pasos 1 a 5 hechos (ajuste fiscal al aceptar en `return_fiscal.py`) (reintegros `RI-000001` en `/sales/receipts/{id}/refunds`; e2e `test_sales_refunds.py`) (0142 en desarrollo, `sales_return_fiscal.py`). V5 completo en develop (#63, #64).
 - **Incidente del 25/11/2026**: la unidad C: se llenó (0.46 GB) y Docker se colgó. Con permiso del usuario se borraron
   los `swap.vhdx` viejos de WSL en `%LOCALAPPDATA%\Temp` (17.6 GB) y se apagó WSL para reiniciar Docker. La base quedó

@@ -1454,3 +1454,14 @@ Revision `0144` (revises `0143`), block V8b2.
 
 **Downgrade** refuses while closes exist. Covered by
 `backend/tests/integration/test_fiscal_period_migration.py`.
+
+## 53. Sales goals (0145)
+
+Revision `0145` (revises `0144`), block V9a.
+
+- `sales_branch_goals`: `company_id`, `branch_id` (composite FK to `branches`), `period` (first day of the
+  month), `amount` (> 0, without VAT), `updated_by_id`, `updated_at`. Unique `(company_id, branch_id, period)`.
+- Permissions `sales_analytics:read` and `sales_goals:manage`, granted to `SUPER_ADMIN`;
+  `fiscal_periods:manage` moves to the `fiscal` module.
+
+**Downgrade** refuses while goals exist. Covered by `backend/tests/integration/test_sales_goals_migration.py`.

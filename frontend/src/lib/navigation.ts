@@ -64,6 +64,7 @@ const ICONS = {
   returns: 'M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6',
   fiscalDocuments: 'M9 14l2 2 4-4M7 3h10a2 2 0 012 2v16l-3-2-2 2-2-2-2 2-2-2-3 2V5a2 2 0 012-2z',
   receivables: 'M3 7h18v10H3z M3 10h18 M7 15h3 M16 13a2 2 0 100 0',
+  analytics: 'M3 3v18h18 M7 15l4-4 3 3 5-6',
   fiscalBooks: 'M4 5a2 2 0 012-2h12v16H6a2 2 0 00-2 2V5z M4 19a2 2 0 002 2h12v-2 M8 7h6 M8 11h6',
   contingency:
     'M12 9v4m0 4h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z',
@@ -323,6 +324,13 @@ export const NAV_GROUPS: NavGroup[] = [
         route: '/sales/receivables',
         implemented: true,
         requiredPermission: 'sales_receivables:read'
+      },
+      {
+        label: 'Análisis comercial',
+        icon: ICONS.analytics,
+        route: '/sales/analytics',
+        implemented: true,
+        requiredPermission: 'sales_analytics:read'
       },
       {
         label: 'Libros de IVA',
