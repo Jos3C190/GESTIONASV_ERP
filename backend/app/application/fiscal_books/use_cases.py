@@ -6,6 +6,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import date
 
+from app.application.period_guard import require_open
 from app.core.exceptions import BusinessRuleError, NotFoundError
 from app.domain.entities.fiscal_books import (
     FiscalMonth,
@@ -22,6 +23,7 @@ from app.domain.ports.fiscal_book_repository import (
     PendingPurchase,
     PurchaseFiscalView,
 )
+from app.domain.ports.fiscal_period_repository import ClosedPeriods
 
 MODES = ("production", "test", "simulated")
 # Una compra entra al libro cuando ya se recibió; en borrador o cancelada no.
@@ -48,8 +50,11 @@ def _period(value: str) -> Period:
 
 
 class FiscalBookUseCases:
-    def __init__(self, repository: FiscalBookRepository) -> None:
+    def __init__(
+        self, repository: FiscalBookRepository, periods: ClosedPeriods | None = None
+    ) -> None:
         self._repository = repository
+        self._periods = periods
 
     async def month(
         self, company_id: uuid.UUID, period_key: str, mode: str | None = None
@@ -118,5 +123,11 @@ class FiscalBookUseCases:
                 code="fiscal_purchase_not_received",
             )
         clean = validate_purchase_fiscal(data, today)
+        await require_open(
+            self._periods,
+            company_id,
+            view.fiscal.issued_on if view.fiscal else None,
+            clean.issued_on,
+        )
         await self._repository.save_purchase_fiscal(company_id, purchase_id, clean, actor_id)
         return await self.purchase(company_id, purchase_id)

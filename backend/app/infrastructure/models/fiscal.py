@@ -7,11 +7,13 @@ isolation unit of a DTE issuer.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
+from typing import Any
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
@@ -25,6 +27,7 @@ from sqlalchemy import (
     func,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -385,4 +388,50 @@ class CompanyContingencyResponsibleModel(Base):
             "AND char_length(btrim(document_number)) BETWEEN 1 AND 25",
             name="ck_company_contingency_responsibles_document",
         ),
+    )
+
+
+class FiscalPeriodCloseModel(Base):
+    """Cierre de un mes fiscal (0144); reabrirlo deja la fila como historial."""
+
+    __tablename__ = "fiscal_period_closes"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("companies.id", ondelete="RESTRICT"), nullable=False
+    )
+    period: Mapped[date] = mapped_column(Date, nullable=False)
+    status: Mapped[str] = mapped_column(String(12), nullable=False, server_default="closed")
+    summary: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    closed_by_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    closed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    reopen_reason: Mapped[str | None] = mapped_column(String(500))
+    reopened_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    reopened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        CheckConstraint("extract(day FROM period) = 1"),
+        CheckConstraint(
+            "(status = 'closed' AND reopen_reason IS NULL AND reopened_by_id IS NULL "
+            "AND reopened_at IS NULL) OR (status = 'reopened' AND reopen_reason IS NOT NULL "
+            "AND length(btrim(reopen_reason)) >= 10 "
+            "AND reopened_by_id IS NOT NULL AND reopened_at IS NOT NULL)",
+            name="ck_fiscal_period_closes_status",
+        ),
+        Index(
+            "uq_fiscal_period_closes_active",
+            "company_id",
+            "period",
+            unique=True,
+            postgresql_where=text("status = 'closed'"),
+        ),
+        Index("ix_fiscal_period_closes_period", "company_id", "period", "closed_at"),
     )

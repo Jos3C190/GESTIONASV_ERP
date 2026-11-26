@@ -39,6 +39,7 @@ from app.infrastructure.models.fiscal import (
     CompanyHaciendaCredentialsModel,
     FiscalBookSettingsModel,
     FiscalEstablishmentModel,
+    FiscalPeriodCloseModel,
     FiscalPointOfSaleModel,
     HaciendaCatalogItemModel,
 )
@@ -272,6 +273,7 @@ __all__: list[str] = [
     "ExpenseTypeModel",
     "FiscalBookSettingsModel",
     "FiscalEstablishmentModel",
+    "FiscalPeriodCloseModel",
     "FiscalPointOfSaleModel",
     "FleetVehicleModel",
     "FleetVehiclePhotoModel",

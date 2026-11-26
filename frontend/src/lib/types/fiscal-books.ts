@@ -136,3 +136,24 @@ export interface PurchaseFiscal {
   recorded_at: string | null;
   renta_defaults: RentaPurchase;
 }
+
+/** Cierre de un mes fiscal (V8b2). */
+export interface PeriodClose {
+  id: string;
+  status: 'closed' | 'reopened';
+  summary: Record<string, string>;
+  closed_by: string | null;
+  closed_at: string;
+  reopen_reason: string | null;
+  reopened_by: string | null;
+  reopened_at: string | null;
+}
+
+export interface PeriodStatus {
+  period: string;
+  label: string;
+  closed: PeriodClose | null;
+  history: PeriodClose[];
+  /** Lo que impide cerrar el mes (vacío si se puede). */
+  blockers: string[];
+}

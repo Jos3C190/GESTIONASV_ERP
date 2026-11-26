@@ -15,6 +15,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 
+from app.application.period_guard import local_day, require_open
 from app.application.sales_invoices.notes import ccf_date, today_sv
 from app.core.exceptions import BusinessRuleError, NotFoundError
 from app.domain.entities.fiscal_contingency import ContingencyResponsible
@@ -36,6 +37,7 @@ from app.domain.entities.sales_fiscal_returns import (
     return_totals,
 )
 from app.domain.ports.contingency_repository import ContingencyResponsibleRepository
+from app.domain.ports.fiscal_period_repository import ClosedPeriods
 from app.domain.ports.sales_fiscal_invalidation_repository import (
     SalesFiscalInvalidationRepository,
 )
@@ -77,9 +79,11 @@ class SalesFiscalReturnUseCases:
         returns: SalesFiscalReturnRepository,
         invalidations: SalesFiscalInvalidationRepository,
         responsibles: ContingencyResponsibleRepository,
+        periods: ClosedPeriods | None = None,
     ) -> None:
         self._documents = documents
         self._returns = returns
+        self._periods = periods
         self._invalidations = invalidations
         self._responsibles = responsibles
 
@@ -193,6 +197,7 @@ class SalesFiscalReturnUseCases:
         item = await self._returns.get(company_id, return_id, lock=True)
         if item is None:
             raise NotFoundError("El evento de retorno no existe.", code="sales_return_not_found")
+        await require_open(self._periods, company_id, local_day(item.issued_at))
         if item.status not in _ANNULLABLE or item.annul_status in (
             AnnulStatus.PENDING,
             AnnulStatus.ACCEPTED,

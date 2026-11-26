@@ -82,3 +82,21 @@ gastos de flota y los generales todavía no entran al libro de compras.
 |---|---|
 | `fiscal_books:read` | Ver los libros y anexos y descargar Excel, PDF y ZIP. |
 | `fiscal_books:manage` | Registrar el documento del proveedor de una compra y la renta de compras por defecto. |
+
+## Cierre de período (V8b2)
+
+Cuando ya declaraste un mes, ciérralo para que nadie registre movimientos con su fecha. En **Libros de IVA**,
+con el mes a la vista, la sección del cierre muestra si está **Abierto** o **Cerrado** (con fecha y quién lo
+cerró).
+
+- **Cerrar período** (permiso `fiscal_periods:manage`) pide confirmación. Solo se cierra un mes ya terminado
+  y sin documentos sin sello (pendientes o en contingencia); si hay algo que lo impide, se lista. Al cerrar
+  se guarda el resumen de los libros del mes como constancia.
+- Con el mes cerrado se rechaza, por la fecha del movimiento:
+  - invalidar o corregir un documento emitido en ese mes, o anular un evento de retorno de ese mes;
+  - registrar o cambiar el documento del proveedor de una compra con fecha de ese mes (o que la tenía);
+  - registrar o anular un recibo o un reintegro con fecha de ese mes, y registrar un comprobante de retención
+    con fecha de ese mes.
+  Emitir documentos no cambia: siempre llevan la fecha de hoy, y el mes actual no se cierra.
+- **Reabrir período** pide un motivo (mínimo 10 caracteres). El historial de cierres y reaperturas queda en el
+  mes y en la bitácora (`CLOSE_FISCAL_PERIOD`, `REOPEN_FISCAL_PERIOD`).

@@ -148,3 +148,26 @@ class PurchaseFiscalOut(BaseModel):
     recorded: PurchaseFiscalIn | None
     recorded_at: datetime | None
     renta_defaults: RentaPurchaseOut
+
+
+class PeriodCloseOut(BaseModel):
+    id: uuid.UUID
+    status: Literal["closed", "reopened"]
+    summary: dict[str, str]
+    closed_by: str | None
+    closed_at: datetime
+    reopen_reason: str | None
+    reopened_by: str | None
+    reopened_at: datetime | None
+
+
+class PeriodStatusOut(BaseModel):
+    period: str
+    label: str
+    closed: PeriodCloseOut | None
+    history: list[PeriodCloseOut]
+    blockers: list[str]
+
+
+class PeriodReopenIn(BaseModel):
+    reason: str = Field(min_length=10, max_length=500)

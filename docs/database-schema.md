@@ -1440,3 +1440,17 @@ Revision `0143` (revises `0142`), block V8b1.
 
 **Downgrade** refuses while exchange orders exist. Covered by
 `backend/tests/integration/test_sales_exchange_migration.py`.
+
+## 52. Fiscal period close (0144)
+
+Revision `0144` (revises `0143`), block V8b2.
+
+- `fiscal_period_closes`: `company_id`, `period` (first day of the month), `status` (`closed`, `reopened`),
+  `summary` (jsonb: the month's book summary and mode at closing), `closed_by_id`, `closed_at`,
+  `reopen_reason` (≥ 10 characters), `reopened_by_id`, `reopened_at`. `ck_fiscal_period_closes_status`: a
+  closed row has no reopening data; a reopened one has all of it. `uq_fiscal_period_closes_active`: one
+  closed row per company and month; reopened rows stay as history.
+- Permission `fiscal_periods:manage`, granted to `SUPER_ADMIN`.
+
+**Downgrade** refuses while closes exist. Covered by
+`backend/tests/integration/test_fiscal_period_migration.py`.
