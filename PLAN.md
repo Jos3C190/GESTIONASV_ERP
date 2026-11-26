@@ -874,7 +874,9 @@ Pasos:
 - [x] **Paso 2: interfaz.** «Cambiar por otro producto» en la devolución aceptada abre el pedido nuevo con cliente y
   sucursal; aviso del cambio en el editor y enlaces en el pedido y en la devolución; aplicar saldo a favor en el panel
   Cobro. Verificar: vitest.
-- [ ] **Paso 3: documentación, verificación y PR.**
+- [x] **Paso 3: documentación, verificación y PR.** Manual de cobros §9, `api.md` y esquema §51; e2e
+  `test_sales_exchange.py`, prueba de migración, suites de pedidos, entregas, devoluciones y unitarias (1507 pasan);
+  vitest; QA en el navegador.
 
 #### V8b2 — Cierre de período (se detalla al terminar V8b1)
 
@@ -901,7 +903,7 @@ los decimales de la representación más corta del número (la misma que va en e
 
 ## Estado actual
 
-- **Paso en curso**: V8b1 paso 3 (docs, batería y PR); pasos 1 y 2 hechos. La vista previa del pedido ignora
+- **Paso en curso**: V8b1 en PR; sigue V8b2 (cierre de período, se detalla al empezar). La vista previa del pedido ignora
   `exchange_return_id` (solo se valida al guardar, con el id del pedido que se edita). QA del 25/11: PED-20261125-F4596AE0
   cambia DEV-20261126-A30FE3F7 y se le aplicó $34.66 del saldo a favor de RC-000003. V8a en develop (#65) y
   multipleOf del DTE corregido en develop (#66); la imagen de `dte-service` se reconstruyó tras el merge. Las pruebas del servicio corren sin
