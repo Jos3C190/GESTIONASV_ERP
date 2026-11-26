@@ -1022,11 +1022,12 @@ Pasos:
 - [x] **Paso 2: manual consolidado** y revisión de los manuales de Ventas. Verificar: enlaces y datos contra lo construido.
   Hecho: `docs/ers-v1/manual-ventas.md` (ciclo, permisos del catálogo, recorrido con octubre); corregidos textos viejos en
   ventas-base, facturación, configuración fiscal, entregas y pedidos; enlace en el README. Enlaces verificados.
-- [ ] **Paso 3: batería completa y PR.**
+- [x] **Paso 3: batería completa y PR.** Hecho: suite local 2114 pasan; `test_sales_deliveries` (rollback) falla a veces
+  solo dentro de la suite completa y pasa sola (intermitente, no causado por V9c). PR #71 con Auto-fix y auto-merge.
 
 ## Estado actual
 
-- **Paso en curso**: V9c paso 3 (batería y PR, después de que #70 entre a develop). V9b en PR #70.
+- **Paso en curso**: ninguno. V9 completo: V9a #69 y V9b #70 en develop; V9c en PR #71 (auto-merge).
   créditos fiscales—, cobros, 5 devoluciones, 1 cambio y la meta); 328 salidas de kardex en octubre; la segunda corrida
   no crea nada. Verificado en el navegador: análisis de octubre ($9,767.19 sin IVA, margen 32.68 %, devoluciones 1.96 %)
   y libros de IVA de octubre. Batería de inventario tras la corrección de capacidad: 567 pasan. Sigue V9c (manual
