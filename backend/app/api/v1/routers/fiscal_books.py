@@ -18,6 +18,7 @@ from app.api.v1.deps import (
     CurrentUser,
     get_audit_service,
     get_fiscal_book_use_cases,
+    get_fiscal_period_use_cases,
     require_permission,
 )
 from app.api.v1.schemas.fiscal_book import (
@@ -27,6 +28,9 @@ from app.api.v1.schemas.fiscal_book import (
     FiscalMonthOut,
     IssuerOut,
     PendingPurchaseOut,
+    PeriodCloseOut,
+    PeriodReopenIn,
+    PeriodStatusOut,
     PurchaseFiscalIn,
     PurchaseFiscalOut,
     PurchaseLineOut,
@@ -36,12 +40,14 @@ from app.api.v1.schemas.fiscal_book import (
 )
 from app.application.audit.audit_service import AuditService
 from app.application.fiscal_books.use_cases import FiscalBookUseCases, MonthView
+from app.application.fiscal_periods import FiscalPeriodUseCases
 from app.domain.entities.fiscal_books import (
     ANNEX_FILES,
     PurchaseFiscalData,
     RentaPurchase,
     annex_file_name,
 )
+from app.domain.entities.fiscal_period import PeriodClose, PeriodStatus
 from app.domain.ports.fiscal_book_repository import PurchaseFiscalView
 from app.infrastructure.fiscal_book_exports import render_book_pdf, render_f07_zip, render_xlsx
 
@@ -52,6 +58,8 @@ Audit = Annotated[AuditService, Depends(get_audit_service)]
 CompanyId = Annotated[uuid.UUID, Depends(request_company_id)]
 _READ = [Depends(require_permission("fiscal_books:read"))]
 _MANAGE = [Depends(require_permission("fiscal_books:manage"))]
+_PERIODS = [Depends(require_permission("fiscal_periods:manage"))]
+Periods = Annotated[FiscalPeriodUseCases, Depends(get_fiscal_period_use_cases)]
 _TZ = ZoneInfo("America/El_Salvador")
 
 
@@ -366,3 +374,124 @@ async def download_zip(
         "application/zip",
         f"F07_{month.period.key}{_SUFFIX[month.mode]}.zip",
     )
+
+
+# --- Cierre de período (V8b2) -------------------------------------------------------------------
+
+
+def _close_out(item: PeriodClose) -> PeriodCloseOut:
+    return PeriodCloseOut(
+        id=item.id,
+        status=item.status,  # type: ignore[arg-type]
+        summary={key: str(value) for key, value in item.summary.items()},
+        closed_by=item.closed_by,
+        closed_at=item.closed_at,
+        reopen_reason=item.reopen_reason,
+        reopened_by=item.reopened_by,
+        reopened_at=item.reopened_at,
+    )
+
+
+def period_status_out(status: PeriodStatus) -> PeriodStatusOut:
+    return PeriodStatusOut(
+        period=status.period.key,
+        label=status.period.label,
+        closed=_close_out(status.closed) if status.closed else None,
+        history=[_close_out(item) for item in status.history],
+        blockers=status.blockers,
+    )
+
+
+async def _period_audit(
+    audit: AuditService,
+    request: Request,
+    *,
+    action: str,
+    actor: uuid.UUID,
+    company_id: uuid.UUID,
+    status: PeriodStatus,
+    reason: str | None = None,
+) -> None:
+    await audit.record(
+        action=action,
+        user_id=actor,
+        company_id=company_id,
+        branch_id=None,
+        resource_type="fiscal_period",
+        resource_id=status.period.key,
+        after_state={
+            "period": status.period.key,
+            "closed": status.closed is not None,
+            "summary": status.closed.summary if status.closed else None,
+            "reason": reason,
+        },
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        required=True,
+    )
+
+
+@router.get(
+    "/{period}/close",
+    response_model=PeriodStatusOut,
+    summary="Estado del cierre del mes, su historial y lo que impide cerrarlo",
+    dependencies=_READ,
+)
+async def period_status(period: str, company_id: CompanyId, periods: Periods) -> PeriodStatusOut:
+    return period_status_out(await periods.status(company_id, period, datetime.now(_TZ).date()))
+
+
+@router.post(
+    "/{period}/close",
+    response_model=PeriodStatusOut,
+    summary="Cerrar un mes ya terminado: bloquea los movimientos con fecha de ese mes",
+    dependencies=_PERIODS,
+)
+async def close_period(
+    period: str,
+    request: Request,
+    current: CurrentUser,
+    company_id: CompanyId,
+    periods: Periods,
+    audit: Audit,
+) -> PeriodStatusOut:
+    status = await periods.close(company_id, period, current.id, datetime.now(_TZ).date())
+    await _period_audit(
+        audit,
+        request,
+        action="CLOSE_FISCAL_PERIOD",
+        actor=current.id,
+        company_id=company_id,
+        status=status,
+    )
+    return period_status_out(status)
+
+
+@router.post(
+    "/{period}/reopen",
+    response_model=PeriodStatusOut,
+    summary="Reabrir un mes cerrado, con motivo",
+    dependencies=_PERIODS,
+)
+async def reopen_period(
+    period: str,
+    body: PeriodReopenIn,
+    request: Request,
+    current: CurrentUser,
+    company_id: CompanyId,
+    periods: Periods,
+    audit: Audit,
+) -> PeriodStatusOut:
+    status = await periods.reopen(
+        company_id, period, body.reason, current.id, datetime.now(_TZ).date()
+    )
+    await _period_audit(
+        audit,
+        request,
+        action="REOPEN_FISCAL_PERIOD",
+        actor=current.id,
+        company_id=company_id,
+        status=status,
+        reason=body.reason,
+    )
+    return period_status_out(status)

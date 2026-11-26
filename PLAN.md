@@ -878,11 +878,33 @@ Pasos:
   `test_sales_exchange.py`, prueba de migración, suites de pedidos, entregas, devoluciones y unitarias (1507 pasan);
   vitest; QA en el navegador.
 
-#### V8b2 — Cierre de período (se detalla al terminar V8b1)
+#### V8b2 — Cierre de período (rama `feature/ventas-v8b2-cierre`, desde la de V8b1 por la migración 0143)
 
-Idea: cerrar un mes por empresa (permiso propio, auditado); en un mes cerrado no se registran ni anulan recibos,
-reintegros ni comprobantes de retención con fecha de ese mes, no se editan los datos fiscales de sus compras ni se
-invalidan sus documentos; reabrir pide motivo; los libros del mes muestran «Cerrado».
+El usuario dijo «Sí, sigue con V8b2» (25/11/2026). Decisiones tomadas por defecto (el usuario no pidió otras):
+- **Qué se cierra**: un mes ya terminado (nunca el actual ni uno futuro), por empresa. Permiso nuevo
+  `fiscal_periods:manage` (cerrar y reabrir), para `SUPER_ADMIN`. Se audita.
+- **Para cerrar**: ningún documento del mes sin sello (pendiente o en contingencia); se guarda el resumen de los libros
+  del mes (modo producción, o el que tenga datos) como constancia.
+- **Efecto** (código `fiscal_period_closed`, «El período … está cerrado; reábrelo para…»), por la fecha del movimiento:
+  - invalidar o corregir un DTE emitido en el mes; anular un evento de retorno del mes;
+  - registrar o cambiar el documento del proveedor de una compra si la fecha anterior o la nueva cae en el mes;
+  - registrar o anular un recibo o un reintegro con fecha del mes; registrar un comprobante de retención con fecha
+    del mes.
+  Emitir documentos no cambia: siempre llevan la fecha de hoy y el mes actual no se cierra.
+- **Reabrir**: con motivo (mínimo 10 caracteres); queda el historial de cierres y reaperturas.
+- **Interfaz**: en Libros de IVA, el estado del mes («Cerrado el … por …» o abierto), **Cerrar período** con los
+  impedimentos y **Reabrir** con motivo.
+
+Pasos:
+- [x] **Paso 0: plan y rama.**
+- [x] **Paso 1: migración 0144 y dominio.** Tabla `fiscal_period_closes` (cierre vigente único por mes), permiso;
+  reglas puras (mes cerrable, motivo, mensaje del bloqueo). Verificar: prueba de migración y unitarias.
+- [x] **Paso 2: cierre, reapertura y bloqueos.** Repositorio, casos de uso y API (`GET/POST /fiscal-books/{period}/close`,
+  `POST .../reopen`); guardia inyectada en cobros, libros (compras), invalidación y retornos. Verificar: e2e.
+- [x] **Paso 3: interfaz.** Estado y acciones del cierre en Libros de IVA. Verificar: vitest.
+- [x] **Paso 4: documentación, verificación y PR.** Manual de libros (cierre), `api.md`, esquema §52; unitarias,
+  migración, e2e `test_fiscal_period_close.py`, suites de cobros, libros, invalidación, retornos y notas (1514 pasan);
+  vitest; QA (cerrar octubre, cobro de octubre rechazado, reabrir con motivo).
 
 ## Corrección: multipleOf del servicio DTE (rama `feature/dte-multipleof-precision`, 25/11/2026)
 
@@ -903,7 +925,8 @@ los decimales de la representación más corta del número (la misma que va en e
 
 ## Estado actual
 
-- **Paso en curso**: V8b1 en PR; sigue V8b2 (cierre de período, se detalla al empezar). La vista previa del pedido ignora
+- **Paso en curso**: V8b2 en PR (sobre V8b1, #67). Lo siguiente es V9. El CHECK de reapertura exige
+  `reopen_reason IS NOT NULL` (con NULL, `length(...) >= 10` da NULL y el CHECK lo dejaba pasar). La vista previa del pedido ignora
   `exchange_return_id` (solo se valida al guardar, con el id del pedido que se edita). QA del 25/11: PED-20261125-F4596AE0
   cambia DEV-20261126-A30FE3F7 y se le aplicó $34.66 del saldo a favor de RC-000003. V8a en develop (#65) y
   multipleOf del DTE corregido en develop (#66); la imagen de `dte-service` se reconstruyó tras el merge. Las pruebas del servicio corren sin

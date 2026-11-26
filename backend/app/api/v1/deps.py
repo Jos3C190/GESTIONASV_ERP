@@ -32,6 +32,7 @@ from app.application.fiscal import FiscalSettingsUseCases
 from app.application.fiscal.email_settings import CompanyEmailSettingsUseCases
 from app.application.fiscal.hacienda_credentials import HaciendaCredentialsUseCases
 from app.application.fiscal_books.use_cases import FiscalBookUseCases
+from app.application.fiscal_periods import FiscalPeriodUseCases
 from app.application.inventory import InventoryUseCases
 from app.application.inventory.kardex_read import InventoryKardexReadUseCases
 from app.application.password_policy import PasswordPolicy
@@ -120,6 +121,9 @@ from app.infrastructure.repositories import (
     SqlAlchemyUserRepository,
 )
 from app.infrastructure.repositories.customer_repository import SqlAlchemyCustomerRepository
+from app.infrastructure.repositories.fiscal_period_repository import (
+    SqlAlchemyFiscalPeriodRepository,
+)
 from app.infrastructure.repositories.fiscal_repository import SqlAlchemyFiscalRepository
 from app.infrastructure.repositories.inventory_repository import SqlAlchemyInventoryRepository
 from app.infrastructure.repositories.price_list_repository import SqlAlchemyPriceListRepository
@@ -258,6 +262,7 @@ def get_fiscal_invalidation_use_cases(session: SessionDep) -> FiscalInvalidation
         dte_client(),
         get_transfer_remission_use_cases(session),
         SqlAlchemySalesFiscalReturnRepository(session),
+        _periods(session),
     )
 
 
@@ -280,6 +285,7 @@ def get_sales_fiscal_return_use_cases(session: SessionDep) -> SalesFiscalReturnU
         SqlAlchemySalesFiscalReturnRepository(session),
         SqlAlchemySalesFiscalInvalidationRepository(session),
         SqlAlchemyContingencyResponsibleRepository(session),
+        _periods(session),
     )
 
 
@@ -296,7 +302,7 @@ def get_sales_receivable_use_cases(session: SessionDep) -> SalesReceivableUseCas
         SqlAlchemySalesReceivableRepository,
     )
 
-    return SalesReceivableUseCases(SqlAlchemySalesReceivableRepository(session))
+    return SalesReceivableUseCases(SqlAlchemySalesReceivableRepository(session), _periods(session))
 
 
 def get_fiscal_book_use_cases(session: SessionDep) -> FiscalBookUseCases:
@@ -304,7 +310,21 @@ def get_fiscal_book_use_cases(session: SessionDep) -> FiscalBookUseCases:
         SqlAlchemyFiscalBookRepository,
     )
 
-    return FiscalBookUseCases(SqlAlchemyFiscalBookRepository(session))
+    return FiscalBookUseCases(SqlAlchemyFiscalBookRepository(session), _periods(session))
+
+
+def _periods(session: AsyncSession) -> SqlAlchemyFiscalPeriodRepository:
+    from app.infrastructure.repositories.fiscal_period_repository import (
+        SqlAlchemyFiscalPeriodRepository,
+    )
+
+    return SqlAlchemyFiscalPeriodRepository(session)
+
+
+def get_fiscal_period_use_cases(session: SessionDep) -> FiscalPeriodUseCases:
+    from app.application.fiscal_periods import FiscalPeriodUseCases
+
+    return FiscalPeriodUseCases(_periods(session), get_fiscal_book_use_cases(session))
 
 
 def get_transfer_remission_use_cases(session: SessionDep) -> TransferRemissionUseCases:

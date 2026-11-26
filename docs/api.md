@@ -2539,3 +2539,20 @@ company and the same customer, have accepted goods, and have no other non-cancel
 `OrderOut` gains `exchange_return_id` and `exchange_return_code`; every return payload gains
 `exchange_orders` (`id`, `code`, `status`). The customer's credit is applied to the exchange document with
 `POST /sales/receipts/{id}/apply`.
+
+## Fiscal period close (revision 0144, block V8b2)
+
+| Method | Path | Permission | Purpose |
+|---|---|---|---|
+| GET | `/fiscal-books/{period}/close` | `fiscal_books:read` | `period`, `label`, `closed` (current close or `null`), `history` (closes and reopenings, newest first: `status`, `summary`, `closed_by`, `closed_at`, `reopen_reason`, `reopened_by`, `reopened_at`) and `blockers` (why it cannot close). |
+| POST | `/fiscal-books/{period}/close` | `fiscal_periods:manage` | Close an ended month with no unsealed documents; stores the month's book summary. |
+| POST | `/fiscal-books/{period}/reopen` | `fiscal_periods:manage` | `reason` (10–500). |
+
+Audited: `CLOSE_FISCAL_PERIOD`, `REOPEN_FISCAL_PERIOD`. Errors (`422`): `fiscal_period_not_ended`,
+`fiscal_period_unsealed_documents`, `fiscal_period_reopen_reason_required`, `fiscal_period_not_closed`,
+`fiscal_book_period_invalid`; `fiscal_period_already_closed` (`409`).
+
+While a month is closed, every movement dated in it answers `422 fiscal_period_closed`: invalidating or
+correcting a DTE issued in the month, annulling a return event of the month, recording a purchase's supplier
+document dated (or previously dated) in the month, registering or annulling a receipt or a refund dated in
+the month, and recording a withholding certificate dated in the month.
