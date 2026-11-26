@@ -1139,8 +1139,10 @@ Pasos:
   Hecho: `0146_pos_registers_shifts.py`, `models/pos.py`, permisos y plantillas en `rbac/catalogue.py`
   (`POS_CASHIER_PERMISSIONS`, `POS_SUPERVISOR_PERMISSIONS`); `test_pos_registers_migration.py` pasa. El fondo
   inicial vive en el turno y su conteo de apertura (no hay movimiento «fondo»).
-- [ ] **Paso 2: dominio.** Estados del turno y transiciones, cálculo del esperado y la diferencia, denominaciones USD,
+- [x] **Paso 2: dominio.** Estados del turno y transiciones, cálculo del esperado y la diferencia, denominaciones USD,
   reglas de movimientos y de aprobación. Verificar: unitarias.
+  Hecho: `app/domain/entities/pos.py` y `tests/unit/test_pos_domain.py` (15 pasan). Una salida o un retiro nunca
+  supera el efectivo en gaveta; el depósito de un turno es lo contado menos el fondo que se queda, más sus retiros.
 - [ ] **Paso 3: repositorios y casos de uso.** Abrir turno con conteo, entradas/salidas/retiros (supervisor sobre el
   tope de la caja), cierre ciego, aprobación o recuento, depósito, informes X y Z; PIN de supervisor (definir el propio,
   verificar con bloqueo tras 5 intentos fallidos durante 15 min). Verificar: integración (concurrencia de apertura,
@@ -1156,7 +1158,7 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: V6a paso 2 (dominio de turnos), rama `feature/pos-v6a-cajas`. V9 completo en develop
+- **Paso en curso**: V6a paso 3 (repositorios y casos de uso), rama `feature/pos-v6a-cajas`. V9 completo en develop
   (#69–#71) y versión v2.1.0 publicada (26/11/2026). El plan del POS (V6a–V6f) está arriba, con las decisiones del usuario.
   créditos fiscales—, cobros, 5 devoluciones, 1 cambio y la meta); 328 salidas de kardex en octubre; la segunda corrida
   no crea nada. Verificado en el navegador: análisis de octubre ($9,767.19 sin IVA, margen 32.68 %, devoluciones 1.96 %)
