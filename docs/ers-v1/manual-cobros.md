@@ -96,3 +96,28 @@ Todo queda en la bitácora.
 | Permiso | Qué permite |
 |---|---|
 | `sales_credit:authorize` | Autorizar pedidos a crédito fuera de cupo, con mora o de un cliente bloqueado, y bloquear o desbloquear clientes. |
+
+## 8. Devoluciones: ajuste fiscal, saldo a favor y reintegro (V8a)
+
+**Ajuste fiscal automático.** Al aceptar mercadería en la revisión de una devolución (B08) de un
+pedido facturado, el sistema emite su documento sin pasos extra:
+
+- Pedido con **crédito fiscal (03)** → **nota de crédito** por las unidades aceptadas.
+- Pedido con **factura (01)** → **evento de retorno** sobre la factura.
+
+Cada aceptación emite el suyo (una devolución puede aceptarse en varias veces) y un reintento de la
+misma operación no emite otro. Si no se puede emitir, la aceptación física se guarda igual y la
+devolución muestra **Sin ajuste fiscal** con el motivo: pedido sin facturar, documento aún sin sello,
+plazo vencido para la nota, cantidades que ya se ajustaron… En ese caso el ajuste se hace a mano
+desde el documento fiscal. El bloque **Ajuste fiscal** de la devolución enlaza la nota o la factura.
+
+**Saldo a favor por sobrepago.** Si el documento ya estaba cobrado, la nota o el retorno lo dejan
+pagado de más. Ese excedente vuelve a los recibos que lo cobraron, empezando por el más reciente, y
+aparece como **saldo a favor** del recibo («Volvió al recibo $…»). Se puede aplicar a otro documento
+(**Aplicar saldo a favor**) o devolver.
+
+**Reintegro.** En el recibo con saldo a favor, **Reintegrar** registra el dinero devuelto al
+cliente: fecha (no futura), monto (hasta el saldo a favor), forma (todas salvo el efectivo piden
+referencia) y motivo. Recibe un número correlativo (RI-000001), no es un documento tributario y
+queda en la bitácora. Si el reintegro no se concretó (transferencia rechazada, el cliente no lo
+retiró), **Anular reintegro** con motivo devuelve el saldo a favor al recibo.

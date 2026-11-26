@@ -838,13 +838,22 @@ Pasos:
   Hecho: bloque «Ajuste fiscal» en `SalesReturnsPanel` (nota o retorno con enlace, o motivo en aviso);
   `RefundForm.svelte` y lista de reintegros con anulación en `CustomerAccount`; saldo liberado en el recibo.
   El `select` de forma de reintegro usa `value` + `onchange` (con `bind:value` jsdom no actualizaba el estado).
-- [ ] **Paso 5: documentación, verificación y PR.**
+- [x] **Paso 5: documentación, verificación y PR.** Manual de cobros §8, `api.md` (ajuste fiscal de
+  devoluciones y reintegros), esquema §50. QA en el navegador (25/11/2026, Grupo Lorena): pedido CCF de 20
+  harinas entregado al confirmar, cobrado (RC-000003), devolución de 2 aceptada → nota DTE-05 …002 simulada de
+  $76.68 enlazada en la devolución; el recibo muestra «Volvió al recibo $76.68»; reintegro RI-000001 por
+  transferencia (pide referencia) y su anulación devuelve el saldo a favor; devolución de un pedido con CCF
+  fallido → «Sin ajuste fiscal: El pedido no está facturado…». Modo claro y 375 px sin scroll horizontal.
 
 ### V8b — Cambio de producto e invalidación tipo 3, cierre de período (se detalla al terminar V8a)
 
 ## Estado actual
 
-- **Paso en curso**: V8a paso 5 (docs, batería completa, QA y PR); pasos 1 a 4 hechos (ajuste fiscal al aceptar en `return_fiscal.py`) (reintegros `RI-000001` en `/sales/receipts/{id}/refunds`; e2e `test_sales_refunds.py`) (0142 en desarrollo, `sales_return_fiscal.py`). V5 completo en develop (#63, #64).
+- **Error encontrado en la QA de V8a (fuera de alcance)**: el servicio DTE rechazó un CCF con
+  `ventaGravada` 658.242 (20 × $33.93 con 3 % de descuento): `multipleOf 1e-8` falla por precisión de punto
+  flotante en la validación del esquema. Pedido PED-20261125-F2CA0F48 quedó con su CCF `failed` (se puede
+  volver a facturar cuando se corrija). Se propone como tarea aparte.
+- **Paso en curso**: V8a PR; pasos 1 a 5 hechos (ajuste fiscal al aceptar en `return_fiscal.py`) (reintegros `RI-000001` en `/sales/receipts/{id}/refunds`; e2e `test_sales_refunds.py`) (0142 en desarrollo, `sales_return_fiscal.py`). V5 completo en develop (#63, #64).
 - **Incidente del 25/11/2026**: la unidad C: se llenó (0.46 GB) y Docker se colgó. Con permiso del usuario se borraron
   los `swap.vhdx` viejos de WSL en `%LOCALAPPDATA%\Temp` (17.6 GB) y se apagó WSL para reiniciar Docker. La base quedó
   intacta. Si vuelve a pasar: revisar `%LOCALAPPDATA%\Temp` (WSL deja un swap de ~3 GB por arranque).
