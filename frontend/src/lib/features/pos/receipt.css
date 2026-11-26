@@ -1,0 +1,98 @@
+/*
+ * Impresión de 80 mm (rollo térmico): 72 mm imprimibles, tinta negra sobre papel blanco.
+ * Las clases llevan el prefijo rc- para no chocar con la aplicación; el mismo archivo da estilo a la
+ * vista previa y a la hoja que se imprime.
+ */
+.rc {
+  box-sizing: border-box;
+  width: 72mm;
+  margin: 0 auto;
+  padding: 3mm 2mm 6mm;
+  background: #fff;
+  color: #000;
+  font-family: 'Geist Mono', 'DejaVu Sans Mono', 'Consolas', ui-monospace, monospace;
+  font-size: 11px;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+.rc * {
+  box-sizing: border-box;
+}
+.rc-center {
+  text-align: center;
+}
+.rc-brand {
+  font-family: 'Geist', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-align: center;
+}
+.rc-muted {
+  color: #333;
+}
+.rc-small {
+  font-size: 9.5px;
+}
+.rc-title {
+  margin: 6px 0 4px;
+  padding: 3px 0;
+  border-top: 1px solid #000;
+  border-bottom: 1px solid #000;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+}
+.rc-section {
+  margin: 8px 0 2px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.rc-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+.rc-row > :first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.rc-row > :last-child {
+  flex: none;
+  text-align: right;
+}
+.rc-strong {
+  font-weight: 800;
+}
+.rc-total {
+  margin-top: 2px;
+  padding-top: 2px;
+  border-top: 1px dashed #000;
+  font-size: 13px;
+  font-weight: 800;
+}
+.rc-sep {
+  margin: 6px 0;
+  border: 0;
+  border-top: 1px dashed #000;
+}
+.rc-sign {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 18px;
+}
+.rc-sign > div {
+  padding-top: 2px;
+  border-top: 1px solid #000;
+  font-size: 9.5px;
+  text-align: center;
+}
+.rc-note {
+  margin-top: 2px;
+  font-size: 9.5px;
+  font-style: italic;
+  overflow-wrap: anywhere;
+}

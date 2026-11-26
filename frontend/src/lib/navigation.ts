@@ -77,7 +77,11 @@ const ICONS = {
   settings:
     'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z',
   privacy: 'M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6z M9 12l2 2 4-4',
-  trash: 'M3 6h18 M8 6V4h8v2 M19 6l-1 15H6L5 6 M10 11v5 M14 11v5'
+  trash: 'M3 6h18 M8 6V4h8v2 M19 6l-1 15H6L5 6 M10 11v5 M14 11v5',
+  posTill: 'M4 7h16v12H4z M8 7V4h8v3 M4 12h16 M8 16h2 M14 16h2',
+  posShifts: 'M12 3a9 9 0 100 18 9 9 0 000-18z M12 7v5l3 2',
+  posDeposits: 'M3 10l9-6 9 6 M5 10v8 M19 10v8 M9 10v8 M15 10v8 M3 20h18',
+  posRegisters: 'M3 7h18v10H3z M7 12h.01 M12 12h4'
 };
 
 export const NAV_GROUPS: NavGroup[] = [
@@ -373,6 +377,39 @@ export const NAV_GROUPS: NavGroup[] = [
         route: '/sales/fiscal-settings',
         implemented: true,
         requiredPermission: 'fiscal_settings:read'
+      }
+    ]
+  },
+  {
+    label: 'Punto de venta',
+    items: [
+      {
+        label: 'Caja',
+        icon: ICONS.posTill,
+        route: '/pos',
+        implemented: true,
+        requiredPermissions: ['pos:sell', 'pos:shift_open']
+      },
+      {
+        label: 'Turnos de caja',
+        icon: ICONS.posShifts,
+        route: '/pos/shifts',
+        implemented: true,
+        requiredPermissions: ['pos:supervise', 'pos:reports']
+      },
+      {
+        label: 'Depósitos',
+        icon: ICONS.posDeposits,
+        route: '/pos/deposits',
+        implemented: true,
+        requiredPermission: 'pos:deposits'
+      },
+      {
+        label: 'Cajas',
+        icon: ICONS.posRegisters,
+        route: '/pos/registers',
+        implemented: true,
+        requiredPermission: 'pos:registers_manage'
       }
     ]
   },

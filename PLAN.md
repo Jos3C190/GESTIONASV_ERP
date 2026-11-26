@@ -1158,15 +1158,20 @@ Pasos:
   configuración de cajas, apertura idempotente, caja ocupada, salida con PIN, cierre ciego, recuento,
   aprobación, depósito (fecha no futura ni anterior al cierre), autoaprobación prohibida, sucursal ajena.
   Las inserciones que pueden chocar van en un punto de guardado: el error de negocio confirma la sesión.
-- [ ] **Paso 5: interfaz.** Configuración de cajas; espacio del cajero en `/pos` a pantalla completa y entrada directa
+- [x] **Paso 5: interfaz.** Configuración de cajas; espacio del cajero en `/pos` a pantalla completa y entrada directa
   para quien solo tiene el POS; abrir turno, movimientos, cierre ciego; panel del supervisor (turnos de la sucursal,
   aprobar, depósito); informe X/Z imprimible. Verificar: vitest; svelte-check y lint.
+  Hecho: `lib/features/pos/` (caja `PosWorkspace`, apertura, movimientos con supervisor, conteo ciego, PIN;
+  `ShiftsPage` y `ShiftReview` con informe X/Z en 80 mm; `DepositsPage`; `RegistersPage`), rutas `/pos`,
+  `/pos/shifts`, `/pos/deposits`, `/pos/registers`, grupo «Punto de venta» del menú. El cajero que solo tiene
+  el POS entra a `/pos` sin menú (`isPosWorkspace`); el supervisor de tienda entra a la caja con su menú
+  (`hasOnlyPosModules`). Impresión 80 mm reutilizable: `print.ts` + `receipt.css`. vitest 1262 pasan.
 - [ ] **Paso 6: documentación, batería, QA y PR.** `docs/api.md`, `docs/database-schema.md`, manual del POS (parte de
   caja). Batería completa, QA en el navegador (claro, oscuro, 375 px) y PR con Auto-fix y auto-merge.
 
 ## Estado actual
 
-- **Paso en curso**: V6a paso 5 (interfaz), rama `feature/pos-v6a-cajas`. V9 completo en develop
+- **Paso en curso**: V6a paso 6 (documentación, batería, QA y PR), rama `feature/pos-v6a-cajas`. V9 completo en develop
   (#69–#71) y versión v2.1.0 publicada (26/11/2026). El plan del POS (V6a–V6f) está arriba, con las decisiones del usuario.
   créditos fiscales—, cobros, 5 devoluciones, 1 cambio y la meta); 328 salidas de kardex en octubre; la segunda corrida
   no crea nada. Verificado en el navegador: análisis de octubre ($9,767.19 sin IVA, margen 32.68 %, devoluciones 1.96 %)
