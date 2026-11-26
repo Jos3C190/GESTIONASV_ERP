@@ -956,9 +956,9 @@ Diseño (plan maestro §5.10):
 
 Pasos:
 - [x] **Paso 0: plan y rama.**
-- [ ] **Paso 1: migración 0145, catálogo y dominio.** Metas y permisos; reglas puras (mes, monto, avance). Verificar:
+- [x] **Paso 1: migración 0145, catálogo y dominio.** Metas y permisos; reglas puras (mes, monto, avance). Verificar:
   prueba de migración y unitarias.
-- [ ] **Paso 2: consulta del análisis y API.** `GET /sales/analytics`, `GET/PUT /sales/goals/{period}`. Verificar: e2e
+- [x] **Paso 2: consulta del análisis y API.** `GET /sales/analytics`, `GET/PUT /sales/goals/{period}`. Verificar: e2e
   (cifras sin IVA, costo oculto sin permiso, alcance por sucursal, metas).
 - [ ] **Paso 3: interfaz.** Página «Ventas → Análisis», editor de metas e indicadores en el Dashboard con permiso.
   Verificar: vitest.
@@ -970,7 +970,8 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: V9a paso 1 (migración 0145, catálogo de permisos y dominio). V8 completo en develop (#65, #67, #68).
+- **Paso en curso**: V9a paso 3 (interfaz: Ventas → Análisis, metas y Dashboard con permiso); pasos 1 y 2 hechos
+  (`/sales/analytics`, `/sales/goals/{period}`, migración 0145). V8 completo en develop (#65, #67, #68).
 - **V8a**: en develop (#65); pasos 1 a 5 hechos (ajuste fiscal al aceptar en `return_fiscal.py`) (reintegros `RI-000001` en `/sales/receipts/{id}/refunds`; e2e `test_sales_refunds.py`) (0142 en desarrollo, `sales_return_fiscal.py`). V5 completo en develop (#63, #64).
 - **Incidente del 25/11/2026**: la unidad C: se llenó (0.46 GB) y Docker se colgó. Con permiso del usuario se borraron
   los `swap.vhdx` viejos de WSL en `%LOCALAPPDATA%\Temp` (17.6 GB) y se apagó WSL para reiniciar Docker. La base quedó
