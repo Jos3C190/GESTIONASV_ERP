@@ -13,18 +13,21 @@ from app.domain.entities.sales_receivables import (
     AgingBucket,
     ApplicationRequest,
     PaymentLine,
+    PaymentMethod,
     ReceiptStatus,
     aging,
     require_annul_reason,
     validate_applications,
     validate_payments,
 )
+from app.domain.entities.sales_return_fiscal import validate_refund
 from app.domain.ports.sales_receivable_repository import (
     AccountDocument,
     Certificate,
     CustomerRef,
     Issuer,
     Receipt,
+    Refund,
     SalesReceivableRepository,
 )
 
@@ -247,6 +250,77 @@ class SalesReceivableUseCases:
             company_id, receipt_id, require_annul_reason(reason), actor_id
         )
         return before, await self.receipt(company_id, receipt_id)
+
+    async def register_refund(
+        self,
+        company_id: uuid.UUID,
+        receipt_id: uuid.UUID,
+        *,
+        refunded_on: date,
+        amount: Decimal,
+        method: PaymentMethod,
+        reference: str | None,
+        reason: str,
+        idempotency_key: str,
+        actor_id: uuid.UUID,
+        today: date,
+    ) -> tuple[Receipt, Refund, bool]:
+        """Devuelve dinero al cliente desde el saldo a favor del recibo (V8a)."""
+
+        if len(idempotency_key) < MIN_KEY:
+            raise BusinessRuleError(
+                "La llave de idempotencia es demasiado corta.", code="sales_refund_key_invalid"
+            )
+        previous = await self._repository.refund_by_key(company_id, idempotency_key)
+        if previous is not None:
+            if previous.receipt_id != receipt_id:
+                raise ConflictError(
+                    "La llave ya se usó para otro reintegro.", code="sales_refund_key_conflict"
+                )
+            return await self.receipt(company_id, receipt_id), previous, False
+        receipt = await self._repository.receipt(company_id, receipt_id, lock=True)
+        if receipt is None:
+            raise NotFoundError("Recibo no encontrado.", code="sales_receipt_not_found")
+        if receipt.status is not ReceiptStatus.ISSUED:
+            raise BusinessRuleError(
+                "Un recibo anulado no tiene saldo a favor.", code="sales_receipt_annulled"
+            )
+        clean_reference, clean_reason = validate_refund(
+            amount=amount,
+            available=receipt.unapplied,
+            method=method,
+            reference=reference,
+            reason=reason,
+            refunded_on=refunded_on,
+            today=today,
+        )
+        refund_id = await self._repository.create_refund(
+            company_id=company_id,
+            receipt=receipt,
+            refunded_on=refunded_on,
+            amount=amount,
+            method=method,
+            reference=clean_reference,
+            reason=clean_reason,
+            idempotency_key=idempotency_key,
+            actor_id=actor_id,
+        )
+        refund = await self._repository.refund(company_id, refund_id)
+        assert refund is not None
+        return await self.receipt(company_id, receipt_id), refund, True
+
+    async def annul_refund(
+        self, company_id: uuid.UUID, refund_id: uuid.UUID, reason: str, actor_id: uuid.UUID
+    ) -> tuple[Refund, Receipt]:
+        refund = await self._repository.refund(company_id, refund_id, lock=True)
+        if refund is None:
+            raise NotFoundError("Reintegro no encontrado.", code="sales_refund_not_found")
+        if refund.status is not ReceiptStatus.ISSUED:
+            raise BusinessRuleError("El reintegro ya está anulado.", code="sales_refund_annulled")
+        await self._repository.annul_refund(
+            company_id, refund_id, require_annul_reason(reason), actor_id
+        )
+        return refund, await self.receipt(company_id, refund.receipt_id)
 
     async def record_certificate(
         self,

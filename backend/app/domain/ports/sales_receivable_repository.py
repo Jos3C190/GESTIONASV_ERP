@@ -11,6 +11,7 @@ from typing import Protocol
 from app.domain.entities.sales_receivables import (
     ApplicationRequest,
     PaymentLine,
+    PaymentMethod,
     ReceiptStatus,
     ReceivableDocument,
 )
@@ -60,6 +61,23 @@ class Application:
 
 
 @dataclass(frozen=True)
+class Refund:
+    """Reintegro de dinero desde el saldo a favor de un recibo (V8a)."""
+
+    id: uuid.UUID
+    receipt_id: uuid.UUID
+    number: int
+    refunded_on: date
+    amount: Decimal
+    method: PaymentMethod
+    reference: str | None
+    reason: str
+    status: ReceiptStatus
+    annul_reason: str | None = None
+    annulled_at: datetime | None = None
+
+
+@dataclass(frozen=True)
 class Receipt:
     id: uuid.UUID
     company_id: uuid.UUID
@@ -75,10 +93,20 @@ class Receipt:
     annul_reason: str | None = None
     annulled_at: datetime | None = None
     created_at: datetime | None = None
+    released: Decimal = Decimal("0")
+    """Lo aplicado que volvió porque una nota o un retorno dejaron el documento pagado de más."""
+    refunds: list[Refund] = field(default_factory=list)
+
+    @property
+    def refunded(self) -> Decimal:
+        return sum(
+            (item.amount for item in self.refunds if item.status is ReceiptStatus.ISSUED),
+            Decimal("0"),
+        )
 
     @property
     def unapplied(self) -> Decimal:
-        """Saldo a favor: lo cobrado que no está aplicado a un documento vigente."""
+        """Saldo a favor: lo cobrado que no está aplicado a un documento vigente ni reintegrado."""
 
         if self.status is ReceiptStatus.ANNULLED:
             return Decimal("0")
@@ -86,7 +114,7 @@ class Receipt:
             (item.amount for item in self.applications if not item.document_invalidated),
             Decimal("0"),
         )
-        return self.total - applied
+        return self.total - applied + self.released - self.refunded
 
 
 @dataclass(frozen=True)
@@ -179,6 +207,30 @@ class SalesReceivableRepository(Protocol):
 
     async def annul_receipt(
         self, company_id: uuid.UUID, receipt_id: uuid.UUID, reason: str, actor_id: uuid.UUID
+    ) -> None: ...
+
+    async def refund(
+        self, company_id: uuid.UUID, refund_id: uuid.UUID, *, lock: bool = False
+    ) -> Refund | None: ...
+
+    async def refund_by_key(self, company_id: uuid.UUID, key: str) -> Refund | None: ...
+
+    async def create_refund(
+        self,
+        *,
+        company_id: uuid.UUID,
+        receipt: Receipt,
+        refunded_on: date,
+        amount: Decimal,
+        method: PaymentMethod,
+        reference: str | None,
+        reason: str,
+        idempotency_key: str,
+        actor_id: uuid.UUID,
+    ) -> uuid.UUID: ...
+
+    async def annul_refund(
+        self, company_id: uuid.UUID, refund_id: uuid.UUID, reason: str, actor_id: uuid.UUID
     ) -> None: ...
 
     async def save_certificate(

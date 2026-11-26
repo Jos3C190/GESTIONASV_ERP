@@ -822,7 +822,7 @@ Pasos:
 - [x] **Paso 1: migración 0142 y dominio.** `sales_returns.fiscal_note_id` (nota 05), `fiscal_return_id` (retorno),
   `fiscal_status` y `fiscal_message`; `sales_refunds`. Dominio: conversión de cantidades y reparto del excedente.
   Verificar: prueba de migración y pytest.
-- [ ] **Paso 2: saldo a favor por sobrepago y reintegros.** Repositorio y API (`POST /sales/receipts/{id}/refunds`,
+- [x] **Paso 2: saldo a favor por sobrepago y reintegros.** Repositorio y API (`POST /sales/receipts/{id}/refunds`,
   anular). Verificar: e2e (nota sobre un CCF pagado deja saldo a favor; reintegro y su anulación).
 - [ ] **Paso 3: ajuste fiscal automático al aceptar.** En la resolución de B08: emitir la nota o el retorno, guardar el
   vínculo o el motivo; encolar después del commit. Verificar: e2e con CCF y con factura.
@@ -834,7 +834,7 @@ Pasos:
 
 ## Estado actual
 
-- **Paso en curso**: V8a paso 2 (saldo a favor por sobrepago y reintegros); paso 1 hecho (0142 en desarrollo, `sales_return_fiscal.py`). V5 completo en develop (#63, #64).
+- **Paso en curso**: V8a paso 3 (ajuste fiscal automático al aceptar); pasos 1 y 2 hechos (reintegros `RI-000001` en `/sales/receipts/{id}/refunds`; e2e `test_sales_refunds.py`) (0142 en desarrollo, `sales_return_fiscal.py`). V5 completo en develop (#63, #64).
 - **Incidente del 25/11/2026**: la unidad C: se llenó (0.46 GB) y Docker se colgó. Con permiso del usuario se borraron
   los `swap.vhdx` viejos de WSL en `%LOCALAPPDATA%\Temp` (17.6 GB) y se apagó WSL para reiniciar Docker. La base quedó
   intacta. Si vuelve a pasar: revisar `%LOCALAPPDATA%\Temp` (WSL deja un swap de ~3 GB por arranque).
