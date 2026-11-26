@@ -790,10 +790,51 @@ Pasos:
   375 px. Agregado en la verificación: «Autorizar crédito para facturar» sobre un pedido confirmado (sin él, un
   pedido que agota el cupo entre confirmar y facturar quedaba trabado).
 
+## V8 — Devoluciones con efecto fiscal y cierre (decidido el 25/11/2026)
+
+Tras V5 el usuario preguntó «¿Qué sigue?» y luego dijo «Continúa» con la recomendación: V8 empezando por las
+devoluciones con efecto fiscal. Decisiones (25/11/2026):
+- **Ajuste fiscal automático al aceptar** una devolución (B08) de un pedido facturado: nota de crédito si el documento
+  es un crédito fiscal (03), evento de retorno si es una factura (01), por las cantidades aceptadas y vinculado a la
+  devolución. Si no se puede (plazo vencido, documento sin sellar, invalidación en curso, pedido sin facturar), la
+  devolución se acepta igual y queda el motivo visible.
+- **Saldo a favor y reintegro**: lo pagado de más tras la nota o el retorno vuelve como saldo a favor del cliente; si se
+  le devuelve dinero, se registra un reintegro (forma de pago y referencia) que descuenta ese saldo.
+
+Lo que ya existe (no se rehace): B08 recibe, inspecciona y acepta o rechaza por línea; lo aceptado vuelve al
+inventario con el costo de la salida original (`app/application/sales/returns.py`). V4c/V4d2 emiten notas y retornos;
+V5a calcula saldos y recibos.
+
+### V8a — Devolución con nota o retorno, saldo a favor y reintegro (rama `feature/ventas-v8a-devoluciones`)
+
+Diseño:
+- **Cantidades**: lo aceptado se registra en unidad base; la línea fiscal es la línea del pedido en su unidad de venta
+  (el documento se arma con las líneas del pedido en orden). Cantidad fiscal = aceptada × cantidad / cantidad base de
+  la línea del pedido, sin pasar del saldo de la línea del documento.
+- **Saldo a favor por documento sobrepagado**: si lo aplicado supera lo que queda por pagar tras notas y retornos, el
+  excedente vuelve a los recibos que lo aplicaron (del más reciente al más antiguo) como saldo a favor. Se calcula, no
+  se guarda.
+- **Reintegro**: sale del saldo a favor de un recibo; número propio, forma de pago, referencia y motivo; se anula con
+  motivo y restituye el saldo. No es un documento fiscal.
+
+Pasos:
+- [x] **Paso 0: plan y rama.**
+- [ ] **Paso 1: migración 0142 y dominio.** `sales_returns.fiscal_note_id` (nota 05), `fiscal_return_id` (retorno),
+  `fiscal_status` y `fiscal_message`; `sales_refunds`. Dominio: conversión de cantidades y reparto del excedente.
+  Verificar: prueba de migración y pytest.
+- [ ] **Paso 2: saldo a favor por sobrepago y reintegros.** Repositorio y API (`POST /sales/receipts/{id}/refunds`,
+  anular). Verificar: e2e (nota sobre un CCF pagado deja saldo a favor; reintegro y su anulación).
+- [ ] **Paso 3: ajuste fiscal automático al aceptar.** En la resolución de B08: emitir la nota o el retorno, guardar el
+  vínculo o el motivo; encolar después del commit. Verificar: e2e con CCF y con factura.
+- [ ] **Paso 4: interfaz.** Ajuste fiscal en el detalle de la devolución; reintegros en el estado de cuenta.
+  Verificar: vitest.
+- [ ] **Paso 5: documentación, verificación y PR.**
+
+### V8b — Cambio de producto e invalidación tipo 3, cierre de período (se detalla al terminar V8a)
+
 ## Estado actual
 
-- **Paso en curso**: V5b terminado; PR a develop con Auto-fix y auto-merge. V5 (pedidos y cobros) queda completo
-  salvo los encargos con anticipo, que el usuario dejó fuera.
+- **Paso en curso**: V8a paso 1 (migración 0142 y dominio). V5 completo en develop (#63, #64).
 - **Incidente del 25/11/2026**: la unidad C: se llenó (0.46 GB) y Docker se colgó. Con permiso del usuario se borraron
   los `swap.vhdx` viejos de WSL en `%LOCALAPPDATA%\Temp` (17.6 GB) y se apagó WSL para reiniciar Docker. La base quedó
   intacta. Si vuelve a pasar: revisar `%LOCALAPPDATA%\Temp` (WSL deja un swap de ~3 GB por arranque).
