@@ -833,15 +833,18 @@ Pasos:
   queda `skipped` con el motivo; la emisión va en un punto de guardado. `return_out` trae `fiscal_adjustments`.
   e2e `test_sales_return_fiscal.py` (los ayudantes `_ccf`, `_confirmed_order` e `_issued` aceptan `stock`: la
   salida automática solo entrega unidades logísticas completas).
-- [ ] **Paso 4: interfaz.** Ajuste fiscal en el detalle de la devolución; reintegros en el estado de cuenta.
+- [x] **Paso 4: interfaz.** Ajuste fiscal en el detalle de la devolución; reintegros en el estado de cuenta.
   Verificar: vitest.
+  Hecho: bloque «Ajuste fiscal» en `SalesReturnsPanel` (nota o retorno con enlace, o motivo en aviso);
+  `RefundForm.svelte` y lista de reintegros con anulación en `CustomerAccount`; saldo liberado en el recibo.
+  El `select` de forma de reintegro usa `value` + `onchange` (con `bind:value` jsdom no actualizaba el estado).
 - [ ] **Paso 5: documentación, verificación y PR.**
 
 ### V8b — Cambio de producto e invalidación tipo 3, cierre de período (se detalla al terminar V8a)
 
 ## Estado actual
 
-- **Paso en curso**: V8a paso 4 (interfaz); pasos 1 a 3 hechos (ajuste fiscal al aceptar en `return_fiscal.py`) (reintegros `RI-000001` en `/sales/receipts/{id}/refunds`; e2e `test_sales_refunds.py`) (0142 en desarrollo, `sales_return_fiscal.py`). V5 completo en develop (#63, #64).
+- **Paso en curso**: V8a paso 5 (docs, batería completa, QA y PR); pasos 1 a 4 hechos (ajuste fiscal al aceptar en `return_fiscal.py`) (reintegros `RI-000001` en `/sales/receipts/{id}/refunds`; e2e `test_sales_refunds.py`) (0142 en desarrollo, `sales_return_fiscal.py`). V5 completo en develop (#63, #64).
 - **Incidente del 25/11/2026**: la unidad C: se llenó (0.46 GB) y Docker se colgó. Con permiso del usuario se borraron
   los `swap.vhdx` viejos de WSL en `%LOCALAPPDATA%\Temp` (17.6 GB) y se apagó WSL para reiniciar Docker. La base quedó
   intacta. Si vuelve a pasar: revisar `%LOCALAPPDATA%\Temp` (WSL deja un swap de ~3 GB por arranque).

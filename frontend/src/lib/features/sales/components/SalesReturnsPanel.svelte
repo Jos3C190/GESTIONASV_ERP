@@ -755,6 +755,48 @@
                       {/each}
                     </div>
                   {/if}
+                  {#if document.fiscal_adjustments?.length}
+                    <div
+                      class="space-y-2 border-b border-border px-4 py-3"
+                      aria-label="Ajuste fiscal de la devolución"
+                    >
+                      <p class="text-xs font-semibold text-foreground">Ajuste fiscal</p>
+                      {#each document.fiscal_adjustments as adjustment (adjustment.id)}
+                        {#if adjustment.status === 'issued'}
+                          <p class="text-xs text-foreground-muted">
+                            <span class="font-medium text-success"
+                              >{adjustment.fiscal_note_id
+                                ? 'Nota de crédito emitida'
+                                : 'Evento de retorno registrado'}</span
+                            >
+                            · {adjustment.lines
+                              .map((item) => `línea ${item.line_number}: ${Number(item.quantity)}`)
+                              .join(', ')} ·
+                            <a
+                              class="text-primary hover:underline"
+                              href={`/sales/fiscal-documents/${adjustment.fiscal_note_id ?? adjustment.document_id}`}
+                              >{adjustment.fiscal_note_id
+                                ? 'Ver nota'
+                                : 'Ver factura y retornos'}</a
+                            >
+                          </p>
+                        {:else}
+                          <p
+                            class="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-foreground"
+                          >
+                            <span class="font-medium">Sin ajuste fiscal:</span>
+                            {adjustment.message}{#if adjustment.document_id}
+                              ·
+                              <a
+                                class="text-primary hover:underline"
+                                href={`/sales/fiscal-documents/${adjustment.document_id}`}
+                                >Ver documento</a
+                              >{/if}
+                          </p>
+                        {/if}
+                      {/each}
+                    </div>
+                  {/if}
                   {#each document.lines as line (line.id)}
                     <div class="space-y-3 p-4">
                       <div
