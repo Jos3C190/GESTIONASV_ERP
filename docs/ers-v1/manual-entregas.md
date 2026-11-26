@@ -1,9 +1,7 @@
 # Manual operativo — entregas de ventas (ERS-B07)
 
-Estado: B07 implementado y verificado técnicamente en `erp_db` con revisión
-0089. Este manual describe el flujo implementado; el recorrido autenticado de
-navegador, incluida la conciliación visual, queda pendiente para B08. La
-implementación está disponible desde el detalle de una venta confirmada.
+Las entregas se preparan desde el detalle de un pedido confirmado. Para el ciclo completo de venta, ver
+[manual-ventas.md](manual-ventas.md).
 
 Si la empresa tiene encendida «Descontar existencias al confirmar el pedido», la entrega se crea
 y confirma sola al confirmar el pedido con las unidades completas que alcanzan. Lo que pida abrir

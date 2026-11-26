@@ -1,16 +1,14 @@
 # Manual de uso — clientes, cotizaciones y pedidos
 
-Este manual reúne el recorrido comercial: cliente, cotización y pedido. Los detalles de cada
-documento están en su propio manual. El despacho físico se registra con las entregas.
+El recorrido comercial completo (cliente, cotización, pedido, entrega, factura, cobro, devolución, libros y
+análisis) está en [manual-ventas.md](manual-ventas.md). Este resumen cubre solo el tramo inicial.
 
 ## 1. Crear o revisar al cliente
 
-1. En el menú **Compras**, abre **Clientes**.
-2. Si el cliente no existe, registra un código y nombre. Teléfono y correo
-   son opcionales.
-3. Guarda y comprueba que aparezca activo en la lista.
-4. Si desactivas un cliente, conserva las cotizaciones y ventas existentes,
-   pero ya no podrás usarlo para nuevas cotizaciones o conversiones.
+1. En el menú **Ventas**, abre **Clientes**.
+2. Registra si es contribuyente (NIT y NRC: recibe crédito fiscal) o consumidor final (recibe factura), sus días y
+   límite de crédito y su lista de precios. Ver [manual-clientes.md](manual-clientes.md).
+3. Un cliente desactivado conserva sus documentos, pero no admite nuevas cotizaciones ni pedidos.
 
 ## 2. Cotizar
 
@@ -19,18 +17,13 @@ La cotización con precio de lista, descuentos, impuestos, autorización y PDF s
 
 ## 3. Tomar el pedido
 
-El pedido nace de una cotización aceptada o se arma directo. Al confirmarlo se apartan las
-existencias de la sucursal. Ver [manual-pedidos.md](manual-pedidos.md).
+El pedido nace de una cotización aceptada o se arma directo. Al confirmarlo sale de bodega (o se apartan las
+existencias). Ver [manual-pedidos.md](manual-pedidos.md) y [manual-entregas.md](manual-entregas.md).
 
-## 4. Entregar
+## Qué significa cada estado
 
-Las entregas toman unidades disponibles de las bodegas de la sucursal y consumen lo apartado.
-Ver [manual-entregas.md](manual-entregas.md).
-
-## Qué no significa el resultado
-
-- **Confirmado** significa comprometido con el cliente y con existencias apartadas; no
-  significa despachado, facturado ni cobrado.
-- El pedido muestra sus impuestos, pero no es un documento fiscal: la factura o el crédito
-  fiscal llegan con el DTE.
-- Pagos, cuentas por cobrar e impresión de tiquetes no forman parte de este flujo.
+- **Confirmado**: comprometido con el cliente, con la salida o el apartado de existencias hechos; todavía no
+  significa facturado ni cobrado.
+- El pedido muestra sus impuestos, pero el documento fiscal es la factura o el crédito fiscal que se emite al
+  **Facturar** ([manual-facturacion.md](manual-facturacion.md)); el cobro se registra en **Cuentas por cobrar**
+  ([manual-cobros.md](manual-cobros.md)).
