@@ -54,6 +54,7 @@ from app.application.rbac.check_permission import CheckPermissionUseCase
 from app.application.retaceos import RetaceoUseCases
 from app.application.retaceos.cost_documents import RetaceoCostDocumentService
 from app.application.sales.deliveries import SalesDeliveryService
+from app.application.sales.return_fiscal import ReturnFiscalAdjuster
 from app.application.sales.returns import SalesReturnService
 from app.application.sales.service import SalesService
 from app.application.sales_discounts import SalesDiscountUseCases
@@ -739,6 +740,18 @@ def get_sales_return_service(
     from app.application.sales.returns import SalesReturnService
 
     return SalesReturnService(session, audit, inventory)
+
+
+def get_return_fiscal_adjuster(
+    session: SessionDep,
+    audit: Annotated[AuditService, Depends(get_audit_service)],
+) -> ReturnFiscalAdjuster:
+    return ReturnFiscalAdjuster(
+        session,
+        get_sales_fiscal_note_use_cases(session),
+        get_sales_fiscal_return_use_cases(session),
+        audit,
+    )
 
 
 def get_authenticate_user_use_case(

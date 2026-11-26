@@ -101,6 +101,28 @@ class AnnulReceiptIn(BaseModel):
     reason: str = Field(min_length=5, max_length=300)
 
 
+class RefundIn(BaseModel):
+    refunded_on: date
+    amount: Decimal = Field(gt=0, max_digits=18, decimal_places=2)
+    method: Method
+    reference: str | None = Field(default=None, max_length=100)
+    reason: str = Field(min_length=5, max_length=300)
+    idempotency_key: str = Field(min_length=8, max_length=120)
+
+
+class RefundOut(BaseModel):
+    id: uuid.UUID
+    code: str
+    refunded_on: date
+    amount: Decimal
+    method: Method
+    reference: str | None
+    reason: str
+    status: Literal["issued", "annulled"]
+    annul_reason: str | None
+    annulled_at: datetime | None
+
+
 class ReceiptOut(BaseModel):
     id: uuid.UUID
     code: str
@@ -117,6 +139,8 @@ class ReceiptOut(BaseModel):
     annul_reason: str | None
     annulled_at: datetime | None
     created_at: datetime | None
+    released: Decimal = Decimal("0")
+    refunds: list[RefundOut] = Field(default_factory=list)
 
 
 class AccountOut(BaseModel):

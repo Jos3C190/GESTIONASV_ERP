@@ -6,6 +6,7 @@ import type {
   CustomerSummary,
   Receipt,
   ReceiptInput,
+  RefundInput,
   WithholdingCertificate
 } from '#lib/types/sales-receivables.ts';
 
@@ -37,6 +38,18 @@ export const salesReceivablesApi = {
   },
   annul(receiptId: string, reason: string) {
     return apiFetch<Receipt>(`/sales/receipts/${receiptId}/annul`, {
+      method: 'POST',
+      body: JSON.stringify({ reason })
+    });
+  },
+  refund(receiptId: string, payload: RefundInput) {
+    return apiFetch<Receipt>(`/sales/receipts/${receiptId}/refunds`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+  annulRefund(refundId: string, reason: string) {
+    return apiFetch<Receipt>(`/sales/refunds/${refundId}/annul`, {
       method: 'POST',
       body: JSON.stringify({ reason })
     });

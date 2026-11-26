@@ -40,8 +40,10 @@ RESPONSIBLE = {
 REQUESTER = {"name": "María Fernanda Rivas", "document_type": "13", "document_number": "04567890-1"}
 
 
-async def _issued(client: AsyncClient) -> tuple[dict[str, str], dict, uuid.UUID, dict]:
-    admin, order, point = await _confirmed_order(client)
+async def _issued(
+    client: AsyncClient, stock: str = "5"
+) -> tuple[dict[str, str], dict, uuid.UUID, dict]:
+    admin, order, point = await _confirmed_order(client, stock)
     saved = await client.put(
         "/api/v1/sales/contingencies/responsible", json=RESPONSIBLE, headers=admin
     )

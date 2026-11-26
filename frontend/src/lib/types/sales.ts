@@ -371,6 +371,19 @@ export interface SalesReturn {
   updated_at: string;
   evidence: SalesReturnEvidence[];
   lines: SalesReturnLine[];
+  /** V8a: nota de crédito o evento de retorno emitido por cada aceptación, o el motivo de no emitirlo. */
+  fiscal_adjustments?: SalesReturnFiscalAdjustment[];
+}
+
+export interface SalesReturnFiscalAdjustment {
+  id: string;
+  status: 'issued' | 'skipped';
+  document_id: string | null;
+  fiscal_note_id: string | null;
+  fiscal_return_id: string | null;
+  message: string | null;
+  lines: { line_number: number; quantity: string }[];
+  created_at: string;
 }
 
 export interface SalesReturnableAllocation {

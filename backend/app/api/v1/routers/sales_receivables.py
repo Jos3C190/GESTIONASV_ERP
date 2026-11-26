@@ -40,6 +40,8 @@ from app.api.v1.schemas.sales_receivable import (
     PaymentIn,
     ReceiptIn,
     ReceiptOut,
+    RefundIn,
+    RefundOut,
     SendStatementIn,
     SentOut,
 )
@@ -53,11 +55,13 @@ from app.domain.entities.sales_receivables import (
     PaymentMethod,
     receipt_code,
 )
+from app.domain.entities.sales_return_fiscal import refund_code
 from app.domain.ports.sales_receivable_repository import (
     AccountDocument,
     Certificate,
     CustomerRef,
     Receipt,
+    Refund,
 )
 from app.infrastructure.sales_receipt_pdf import render_receipt_pdf
 from app.infrastructure.sales_statement_pdf import render_statement_pdf
@@ -146,6 +150,23 @@ def receipt_out(receipt: Receipt) -> ReceiptOut:
         annul_reason=receipt.annul_reason,
         annulled_at=receipt.annulled_at,
         created_at=receipt.created_at,
+        released=receipt.released,
+        refunds=[refund_out(item) for item in receipt.refunds],
+    )
+
+
+def refund_out(refund: Refund) -> RefundOut:
+    return RefundOut(
+        id=refund.id,
+        code=refund_code(refund.number),
+        refunded_on=refund.refunded_on,
+        amount=refund.amount,
+        method=refund.method.value,
+        reference=refund.reference,
+        reason=refund.reason,
+        status=refund.status.value,
+        annul_reason=refund.annul_reason,
+        annulled_at=refund.annulled_at,
     )
 
 
@@ -631,3 +652,98 @@ async def send_customer_statement(
         after={"to": recipient},
     )
     return SentOut(sent_to=recipient)
+
+
+# --- Reintegros (V8a) ---------------------------------------------------------------------------
+
+
+def _refund_state(refund: Refund) -> dict[str, object]:
+    return {
+        "code": refund_code(refund.number),
+        "receipt_id": str(refund.receipt_id),
+        "amount": str(refund.amount),
+        "method": refund.method.value,
+        "reference": refund.reference,
+        "reason": refund.reason,
+        "status": refund.status.value,
+        "annul_reason": refund.annul_reason,
+    }
+
+
+@router.post(
+    "/sales/receipts/{receipt_id}/refunds",
+    response_model=ReceiptOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Reintegrar dinero al cliente desde el saldo a favor del recibo",
+    dependencies=_COLLECT,
+)
+async def register_refund(
+    receipt_id: uuid.UUID,
+    body: RefundIn,
+    request: Request,
+    response: Response,
+    current: CurrentUser,
+    company_id: CompanyId,
+    cases: UseCases,
+    audit: Audit,
+) -> ReceiptOut:
+    receipt, refund, created = await cases.register_refund(
+        company_id,
+        receipt_id,
+        refunded_on=body.refunded_on,
+        amount=body.amount,
+        method=PaymentMethod(body.method),
+        reference=body.reference,
+        reason=body.reason,
+        idempotency_key=body.idempotency_key,
+        actor_id=current.id,
+        today=_today().date(),
+    )
+    if created:
+        await _audit(
+            audit,
+            request,
+            action="REGISTER_SALES_REFUND",
+            actor=current.id,
+            company_id=company_id,
+            branch_id=receipt.branch_id,
+            resource_type="sales_refund",
+            resource_id=str(refund.id),
+            before=None,
+            after=_refund_state(refund),
+        )
+    else:
+        response.status_code = status.HTTP_200_OK
+    return receipt_out(receipt)
+
+
+@router.post(
+    "/sales/refunds/{refund_id}/annul",
+    response_model=ReceiptOut,
+    summary="Anular un reintegro con motivo; restituye el saldo a favor",
+    dependencies=_COLLECT,
+)
+async def annul_refund(
+    refund_id: uuid.UUID,
+    body: AnnulReceiptIn,
+    request: Request,
+    current: CurrentUser,
+    company_id: CompanyId,
+    cases: UseCases,
+    audit: Audit,
+) -> ReceiptOut:
+    before, receipt = await cases.annul_refund(company_id, refund_id, body.reason, current.id)
+    after = next(item for item in receipt.refunds if item.id == refund_id)
+    await _audit(
+        audit,
+        request,
+        action="ANNUL_SALES_REFUND",
+        actor=current.id,
+        company_id=company_id,
+        branch_id=receipt.branch_id,
+        resource_type="sales_refund",
+        resource_id=str(refund_id),
+        before=_refund_state(before),
+        after=_refund_state(after),
+    )
+    return receipt_out(receipt)

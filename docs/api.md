@@ -1382,8 +1382,9 @@ operator resolves each received quantity in append-only events: accepted
 quantities create a customer-return movement at the effective cost of the
 original delivery allocation; rejected quantities create no available stock.
 An accepted quantity is placed in an authorized location and may remain in
-quarantine until the existing warehouse review releases it. The API does not
-create refunds, credit notes, tax documents or payments.
+quarantine until the existing warehouse review releases it. Since V8a (revision 0142) accepting
+goods of an invoiced order also issues its fiscal adjustment (see *Fiscal adjustment of returns and
+refunds*); the return endpoints themselves create no payments.
 
 | Method and path | Permission | Scope and purpose |
 | --- | --- | --- |
@@ -2500,3 +2501,30 @@ Audited: `ADD_COLLECTION_NOTE`, `BLOCK_CUSTOMER_CREDIT`, `UNBLOCK_CUSTOMER_CREDI
 `sales_collection_next_action_invalid`, `sales_credit_block_reason_required`,
 `sales_credit_already_blocked`, `sales_credit_not_blocked`, `sales_statement_recipient_required`,
 `sales_statement_email_unavailable`, `sales_statement_email_failed`.
+
+## Fiscal adjustment of returns and refunds (revision 0142, block V8a)
+
+`POST /sales/returns/{id}/resolve` issues, for the accepted lines of an invoiced order, a **credit
+note** (CCF `03`, `kind = return`) or a **return event** (invoice `01`), queued for the DTE worker
+after the commit. Quantities are converted from base to the sale unit; the fiscal line is the
+position of the sale line. One adjustment per resolution, unique by its `Idempotency-Key`: a replay
+returns the same one. When it cannot be issued (no invoice, document not yet sealed, no DTE service,
+or the issuer refuses — deadline, remaining quantity) the acceptance still commits and the adjustment
+is `skipped` with the Spanish `message`. Every return payload gains `fiscal_adjustments`: `id`,
+`status` (`issued`, `skipped`), `document_id`, `fiscal_note_id`, `fiscal_return_id`, `message`,
+`lines` (`line_number`, `quantity`) and `created_at`. Audited as `SALES_RETURN_FISCAL_ADJUSTMENT`.
+
+A credit note or return event on a paid document leaves it overpaid: the excess is **released** back
+to the receipts that paid it (latest first). `ReceiptOut` gains `released` and `refunds`; `unapplied`
+= total − applied + released − refunded.
+
+| Method | Path | Permission | Purpose |
+|---|---|---|---|
+| POST | `/sales/receipts/{id}/refunds` | `sales_receivables:collect` | Refund money from the receipt's credit: `refunded_on` (not future), `amount` (≤ `unapplied`), `method`, `reference` (required except cash), `reason` (5–300), `idempotency_key`. `201` with the receipt; a replay returns `200`. Numbered `RI-000001` per company; not a DTE. |
+| POST | `/sales/refunds/{id}/annul` | `sales_receivables:collect` | `reason` (5–300). Restores the receipt's credit. |
+
+Audited: `REGISTER_SALES_REFUND`, `ANNUL_SALES_REFUND`. Errors (`422`): `sales_refund_amount_invalid`,
+`sales_refund_exceeds_credit`, `sales_refund_reference_required`, `sales_refund_reason_required`,
+`sales_refund_date_invalid`, `sales_refund_key_invalid`, `sales_refund_annulled`,
+`sales_receipt_annulled`; `sales_refund_key_conflict` (`409`); `sales_refund_not_found`,
+`sales_receipt_not_found` (`404`).

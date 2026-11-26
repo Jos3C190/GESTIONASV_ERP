@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
@@ -82,6 +82,17 @@ class SalesReturnLineOut(BaseModel):
     events: list[SalesReturnEventOut]
 
 
+class ReturnFiscalAdjustmentOut(BaseModel):
+    id: uuid.UUID
+    status: str
+    document_id: uuid.UUID | None
+    fiscal_note_id: uuid.UUID | None
+    fiscal_return_id: uuid.UUID | None
+    message: str | None
+    lines: list[dict[str, Any]]
+    created_at: datetime
+
+
 class SalesReturnOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -101,6 +112,7 @@ class SalesReturnOut(BaseModel):
     updated_at: datetime
     evidence: list[SalesReturnEvidenceOut] = Field(default_factory=list)
     lines: list[SalesReturnLineOut]
+    fiscal_adjustments: list[ReturnFiscalAdjustmentOut] = Field(default_factory=list)
 
 
 class SalesReturnableAllocationOut(BaseModel):
