@@ -923,15 +923,55 @@ los decimales de la representación más corta del número (la misma que va en e
   DTE-03-M001P001-000000000000003 simulado por $743.81 con `ventaGravada` 658.242; el intento `failed` queda
   como historial.
 
+## V9 — Análisis y aceptación (decidido el 26/11/2026)
+
+Decisiones del usuario (26/11/2026), tras mezclar V8 (#65, #67, #68):
+- **Las tres partes en tres PR**: V9a análisis comercial, V9b datos de demostración (un mes completo de Grupo Lorena),
+  V9c manual de Ventas consolidado y prueba integral del ciclo completo.
+- **Ubicación**: página «Ventas → Análisis» con el detalle y filtros, y en el Dashboard cuatro indicadores de ventas del
+  mes que enlazan a ella.
+- **Metas mensuales por sucursal**: meta de venta sin IVA por sucursal y mes, editable por un rol autorizado; el
+  análisis muestra el % de avance.
+- **Permisos (indicación del usuario)**: los datos monetarios y de ventas, también en el Dashboard, solo los ve quien
+  tiene permiso. Permiso nuevo `sales_analytics:read` para ventas y metas; costo y margen además con
+  `sales_costs:read` (ya existe); definir metas con `sales_goals:manage` (nuevo).
+
+### V9a — Análisis comercial y metas (rama `feature/ventas-v9a-analisis`)
+
+Diseño (plan maestro §5.10):
+- **Fuente**: documentos de venta (01 y 03) vigentes —sellados, simulados o en contingencia; no fallidos, rechazados,
+  invalidados ni reemplazados—, por la fecha de emisión en El Salvador. Ingresos **sin IVA** por línea del pedido:
+  no sujeto + exento + gravado − IVA incluido (en factura el gravado lleva IVA).
+- **Costo** (solo con `sales_costs:read`): costo promedio de salida de las entregas confirmadas de la línea
+  (`applied_total_cost`); si la línea no se ha entregado, el costo de la línea por la cantidad. Margen bruto = ingreso
+  − costo.
+- **Devoluciones**: notas de crédito y eventos de retorno vigentes del rango, sin IVA, como % de la venta.
+- **Cortes**: totales (venta, documentos, tiquete promedio, devoluciones, costo y margen), por día, por hora, por
+  sucursal (con meta y avance), por categoría, clientes principales y productos más y menos vendidos.
+- **Alcance**: cada usuario ve solo sus sucursales (`resolve_branch_scope`).
+- **Metas**: tabla `sales_branch_goals` (empresa, sucursal, mes, monto > 0), una por sucursal y mes; se auditan.
+- **Catálogo de permisos**: se agregan al catálogo en código los 10 permisos creados por migración en V3–V8 que
+  faltaban (`fiscal_books:*`, `fiscal_periods:manage`, `sales_credit:authorize`, `sales_invoices:contingency`,
+  `:invalidate`, `:notes`, `:returns`, `sales_receivables:*`) y los dos nuevos.
+
+Pasos:
+- [x] **Paso 0: plan y rama.**
+- [x] **Paso 1: migración 0145, catálogo y dominio.** Metas y permisos; reglas puras (mes, monto, avance). Verificar:
+  prueba de migración y unitarias.
+- [x] **Paso 2: consulta del análisis y API.** `GET /sales/analytics`, `GET/PUT /sales/goals/{period}`. Verificar: e2e
+  (cifras sin IVA, costo oculto sin permiso, alcance por sucursal, metas).
+- [x] **Paso 3: interfaz.** Página «Ventas → Análisis», editor de metas e indicadores en el Dashboard con permiso.
+  Verificar: vitest.
+- [x] **Paso 4: documentación, verificación y PR.** `manual-analisis-comercial.md`, `api.md`, esquema §53; unitarias,
+  migración y e2e del análisis, RBAC y unitarias (1515), vitest completo (1256); QA: análisis de noviembre y Dashboard.
+
+### V9b — Datos de demostración (se detalla al terminar V9a)
+
+### V9c — Manual consolidado y prueba integral (se detalla al terminar V9b)
+
 ## Estado actual
 
-- **Paso en curso**: V8b2 en PR (sobre V8b1, #67). Lo siguiente es V9. El CHECK de reapertura exige
-  `reopen_reason IS NOT NULL` (con NULL, `length(...) >= 10` da NULL y el CHECK lo dejaba pasar). La vista previa del pedido ignora
-  `exchange_return_id` (solo se valida al guardar, con el id del pedido que se edita). QA del 25/11: PED-20261125-F4596AE0
-  cambia DEV-20261126-A30FE3F7 y se le aplicó $34.66 del saldo a favor de RC-000003. V8a en develop (#65) y
-  multipleOf del DTE corregido en develop (#66); la imagen de `dte-service` se reconstruyó tras el merge. Las pruebas del servicio corren sin
-  `node_modules` local (better-sqlite3 no compila en Windows) montando `src` y `test` en la imagen:
-  `MSYS_NO_PATHCONV=1 docker run --rm -v "<ruta>\dte-service\src:/app/src" -v "<ruta>\dte-service\test:/app/test" -w /app proyecto_erp-dte-service npm test`.
+- **Paso en curso**: V9a en PR; sigue V9b (datos de demostración, se detalla al empezar).
 - **V8a**: en develop (#65); pasos 1 a 5 hechos (ajuste fiscal al aceptar en `return_fiscal.py`) (reintegros `RI-000001` en `/sales/receipts/{id}/refunds`; e2e `test_sales_refunds.py`) (0142 en desarrollo, `sales_return_fiscal.py`). V5 completo en develop (#63, #64).
 - **Incidente del 25/11/2026**: la unidad C: se llenó (0.46 GB) y Docker se colgó. Con permiso del usuario se borraron
   los `swap.vhdx` viejos de WSL en `%LOCALAPPDATA%\Temp` (17.6 GB) y se apagó WSL para reiniciar Docker. La base quedó

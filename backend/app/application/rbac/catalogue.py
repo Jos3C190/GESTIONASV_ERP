@@ -200,6 +200,54 @@ PERMISSION_CATALOGUE: Sequence[PermissionSpec] = (
     PermissionSpec(
         "sales_invoices:issue", "Facturar pedidos y reintentar documentos fiscales", "sales"
     ),
+    PermissionSpec(
+        "sales_invoices:contingency", "Activar y cerrar contingencias de facturación", "sales"
+    ),
+    PermissionSpec(
+        "sales_invoices:invalidate", "Invalidar y corregir documentos fiscales emitidos", "sales"
+    ),
+    PermissionSpec(
+        "sales_invoices:notes",
+        "Emitir notas de crédito y de débito sobre un crédito fiscal",
+        "sales",
+    ),
+    PermissionSpec(
+        "sales_invoices:returns", "Registrar y anular eventos de retorno sobre facturas", "sales"
+    ),
+    PermissionSpec(
+        "sales_receivables:read",
+        "Ver la cartera, los estados de cuenta y los recibos de cobro",
+        "sales",
+    ),
+    PermissionSpec(
+        "sales_receivables:collect",
+        "Registrar y anular recibos de cobro y comprobantes de retención",
+        "sales",
+    ),
+    PermissionSpec(
+        "sales_credit:authorize",
+        "Autorizar pedidos a crédito fuera de cupo o con mora y bloquear clientes",
+        "sales",
+    ),
+    PermissionSpec(
+        "sales_analytics:read",
+        "Ver las cifras de venta, el análisis comercial y las metas",
+        "sales",
+    ),
+    PermissionSpec(
+        "sales_goals:manage", "Definir las metas mensuales de venta por sucursal", "sales"
+    ),
+    PermissionSpec(
+        "fiscal_books:read", "Ver y descargar los libros de IVA y los anexos del F-07", "fiscal"
+    ),
+    PermissionSpec(
+        "fiscal_books:manage",
+        "Registrar los datos fiscales de las compras y la renta de compras por defecto",
+        "fiscal",
+    ),
+    PermissionSpec(
+        "fiscal_periods:manage", "Cerrar y reabrir períodos fiscales (meses declarados)", "fiscal"
+    ),
     PermissionSpec("sales_deliveries:read", "Consultar entregas de venta", "sales"),
     PermissionSpec("sales_deliveries:manage", "Preparar entregas de venta", "sales"),
     PermissionSpec(

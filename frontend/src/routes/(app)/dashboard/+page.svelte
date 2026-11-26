@@ -4,6 +4,7 @@
   import { api, type DashboardSummary } from '#lib/api/client.ts';
   import { onMount } from 'svelte';
   import KpiCard from '#lib/features/dashboard/components/KpiCard.svelte';
+  import SalesKpis from '#lib/features/sales-analytics/SalesKpis.svelte';
   import AreaChart from '#lib/features/dashboard/components/AreaChart.svelte';
   import DonutChart from '#lib/features/dashboard/components/DonutChart.svelte';
   import ActivityFeed from '#lib/features/dashboard/components/ActivityFeed.svelte';
@@ -42,10 +43,34 @@
   );
 
   let kpis = $derived([
-    { label: 'Usuarios activos', value: summary?.active_users ?? 0, change: 0, sparkline: [summary?.active_users ?? 0, summary?.active_users ?? 0], icon: 'M17 20h5v-2a4 4 0 0 0-3-3.87M9 20H4v-2a4 4 0 0 1 3-3.87m6-2a4 4 0 1 0-8 0 4 4 0 0 0 8 0z' },
-    { label: 'Empleados', value: summary?.employees ?? 0, change: 0, sparkline: [summary?.employees ?? 0, summary?.employees ?? 0], icon: 'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM12 14a7 7 0 0 0-7 7h14a7 7 0 0 0-7-7z' },
-    { label: 'Almacenes activos', value: summary?.warehouses ?? 0, change: 0, sparkline: [summary?.warehouses ?? 0, summary?.warehouses ?? 0], icon: 'M3 21h18M5 21V8l7-5 7 5v13M8 12h8M8 16h8' },
-    { label: 'Eventos hoy', value: summary?.events_today ?? 0, change: 0, sparkline: [summary?.events_today ?? 0, summary?.events_today ?? 0], icon: 'M13 2L3 14h7l-1 8 10-12h-7l1-8z' }
+    {
+      label: 'Usuarios activos',
+      value: summary?.active_users ?? 0,
+      change: 0,
+      sparkline: [summary?.active_users ?? 0, summary?.active_users ?? 0],
+      icon: 'M17 20h5v-2a4 4 0 0 0-3-3.87M9 20H4v-2a4 4 0 0 1 3-3.87m6-2a4 4 0 1 0-8 0 4 4 0 0 0 8 0z'
+    },
+    {
+      label: 'Empleados',
+      value: summary?.employees ?? 0,
+      change: 0,
+      sparkline: [summary?.employees ?? 0, summary?.employees ?? 0],
+      icon: 'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM12 14a7 7 0 0 0-7 7h14a7 7 0 0 0-7-7z'
+    },
+    {
+      label: 'Almacenes activos',
+      value: summary?.warehouses ?? 0,
+      change: 0,
+      sparkline: [summary?.warehouses ?? 0, summary?.warehouses ?? 0],
+      icon: 'M3 21h18M5 21V8l7-5 7 5v13M8 12h8M8 16h8'
+    },
+    {
+      label: 'Eventos hoy',
+      value: summary?.events_today ?? 0,
+      change: 0,
+      sparkline: [summary?.events_today ?? 0, summary?.events_today ?? 0],
+      icon: 'M13 2L3 14h7l-1 8 10-12h-7l1-8z'
+    }
   ]);
 
   onMount(() => {
@@ -79,19 +104,34 @@
       Hola, {session.user?.username ?? ''} 👋
     </h1>
     <p class="mt-1 text-sm text-foreground-muted">
-      {new Date().toLocaleDateString('es-SV', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+      {new Date().toLocaleDateString('es-SV', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      })}
       · {branch.label}
     </p>
   </div>
 
   {#if summaryError}
-    <div class="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-danger" role="alert">{summaryError}</div>
+    <div
+      class="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-danger"
+      role="alert"
+    >
+      {summaryError}
+    </div>
   {:else}
     <Callout variant="info">
       <span class="font-medium text-foreground">Contexto: {branch.label}.</span>
-      <span class="text-foreground-muted"> Las métricas operativas y la actividad reciente respetan este alcance.</span>
+      <span class="text-foreground-muted">
+        Las métricas operativas y la actividad reciente respetan este alcance.</span
+      >
     </Callout>
   {/if}
+
+  <!-- Ventas del mes (solo con `sales_analytics:read`) -->
+  <SalesKpis />
 
   <!-- KPIs -->
   <div class="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -118,9 +158,11 @@
           {#each ['7D', '30D', '90D'] as r (r)}
             <button
               type="button"
-              onclick={() => range = r as '7D' | '30D' | '90D'}
-              class="rounded-md px-2.5 py-1 text-xs font-medium transition-colors {range === r ? 'bg-surface-elevated text-foreground shadow-soft' : 'text-foreground-subtle hover:text-foreground'}"
-            >{r}</button>
+              onclick={() => (range = r as '7D' | '30D' | '90D')}
+              class="rounded-md px-2.5 py-1 text-xs font-medium transition-colors {range === r
+                ? 'bg-surface-elevated text-foreground shadow-soft'
+                : 'text-foreground-subtle hover:text-foreground'}">{r}</button
+            >
           {/each}
         </div>
       </div>
@@ -136,14 +178,18 @@
       {#if loading}
         <div class="flex items-center gap-5">
           <div class="h-[140px] w-[140px] rounded-full skeleton"></div>
-          <div class="flex-1 space-y-2">{#each Array(5) as _}<div class="h-3 rounded skeleton"></div>{/each}</div>
+          <div class="flex-1 space-y-2">
+            {#each Array(5) as _}<div class="h-3 rounded skeleton"></div>{/each}
+          </div>
         </div>
+      {:else if (summary?.department_distribution.length ?? 0) > 0}
+        <DonutChart data={summary?.department_distribution ?? []} size={140} />
       {:else}
-        {#if (summary?.department_distribution.length ?? 0) > 0}
-          <DonutChart data={summary?.department_distribution ?? []} size={140} />
-        {:else}
-          <div class="flex h-[140px] items-center justify-center text-center text-xs text-foreground-muted">Sin empleados con departamento en este contexto.</div>
-        {/if}
+        <div
+          class="flex h-[140px] items-center justify-center text-center text-xs text-foreground-muted"
+        >
+          Sin empleados con departamento en este contexto.
+        </div>
       {/if}
     </div>
   </div>
@@ -154,9 +200,14 @@
     <div class="rounded-xl border border-border bg-surface-elevated p-5 lg:col-span-2">
       <div class="mb-4 flex items-center justify-between">
         <h2 class="text-sm font-semibold text-foreground">Actividad reciente</h2>
-        <a href="/audit-log" class="text-[11px] font-medium text-primary hover:underline">Ver todo →</a>
+        <a href="/audit-log" class="text-[11px] font-medium text-primary hover:underline"
+          >Ver todo →</a
+        >
       </div>
-      <div class="max-h-[340px] overflow-y-auto" style="mask-image: linear-gradient(to bottom, black 85%, transparent 100%); -webkit-mask-image: linear-gradient(to bottom, black 85%, transparent 100%);">
+      <div
+        class="max-h-[340px] overflow-y-auto"
+        style="mask-image: linear-gradient(to bottom, black 85%, transparent 100%); -webkit-mask-image: linear-gradient(to bottom, black 85%, transparent 100%);"
+      >
         <ActivityFeed />
       </div>
     </div>
@@ -168,7 +219,11 @@
         {#if loading}
           <div class="mx-auto h-[120px] w-[120px] rounded-full skeleton"></div>
         {:else}
-          <ProgressRing value={summary?.onboarding_progress ?? 0} label="Expedientes completos" size={120} />
+          <ProgressRing
+            value={summary?.onboarding_progress ?? 0}
+            label="Expedientes completos"
+            size={120}
+          />
         {/if}
       </div>
       <div class="rounded-xl border border-border bg-surface-elevated p-5">
@@ -190,13 +245,17 @@
       <a href="/users" class="text-[11px] font-medium text-primary hover:underline">Ver todos →</a>
     </div>
     {#if loading}
-      <div class="space-y-2">{#each Array(6) as _}<div class="h-10 rounded skeleton"></div>{/each}</div>
+      <div class="space-y-2">
+        {#each Array(6) as _}<div class="h-10 rounded skeleton"></div>{/each}
+      </div>
+    {:else if recentUsers.length > 0}
+      <SummaryTable rows={recentUsers} />
     {:else}
-      {#if recentUsers.length > 0}
-        <SummaryTable rows={recentUsers} />
-      {:else}
-        <div class="rounded-xl border border-dashed border-border p-8 text-center text-sm text-foreground-muted">No hay usuarios recientes en este contexto.</div>
-      {/if}
+      <div
+        class="rounded-xl border border-dashed border-border p-8 text-center text-sm text-foreground-muted"
+      >
+        No hay usuarios recientes en este contexto.
+      </div>
     {/if}
   </div>
 </div>
