@@ -784,14 +784,16 @@ Pasos:
 - [x] **Paso 3: gestión de cobro.** Notas, bloqueo y correo del estado de cuenta (PDF), con API y auditoría.
 - [x] **Paso 4: interfaz.** Motivos de crédito en el pedido y su autorización; cupo y bloqueo en el estado de
   cuenta y en el cliente; notas y envío. Verificar: vitest.
-- [ ] **Paso 5: documentación, verificación y PR.**
+- [x] **Paso 5: documentación, verificación y PR.** Manual de cobros §6-7, `api.md`, esquema §49. Batería:
+  backend 2091, frontend 1239, ruff, mypy, svelte-check, ESLint y build. QA con Grupo Lorena: panel «Crédito y
+  cobranza» de El Trigal (disponible $472.82 = $500 − $27.18), nota de cobro, bloqueo con motivo y desbloqueo,
+  375 px. Agregado en la verificación: «Autorizar crédito para facturar» sobre un pedido confirmado (sin él, un
+  pedido que agota el cupo entre confirmar y facturar quedaba trabado).
 
 ## Estado actual
 
-- **Paso en curso**: V5b paso 5 (batería, QA y PR). Pasos 1 a 4 hechos y documentación escrita. V5a en develop (#63),
-  mezclado en la rama. Hecho en V5b: motivos de crédito al confirmar (cupo, mora, bloqueo), autorizar con permiso y
-  nota, reevaluación al facturar y «Autorizar crédito para facturar» sobre un pedido confirmado (`/sales/{id}/authorize-credit`),
-  gestión de cobro en el estado de cuenta (`CreditPanel.svelte`).
+- **Paso en curso**: V5b terminado; PR a develop con Auto-fix y auto-merge. V5 (pedidos y cobros) queda completo
+  salvo los encargos con anticipo, que el usuario dejó fuera.
 - **Incidente del 25/11/2026**: la unidad C: se llenó (0.46 GB) y Docker se colgó. Con permiso del usuario se borraron
   los `swap.vhdx` viejos de WSL en `%LOCALAPPDATA%\Temp` (17.6 GB) y se apagó WSL para reiniciar Docker. La base quedó
   intacta. Si vuelve a pasar: revisar `%LOCALAPPDATA%\Temp` (WSL deja un swap de ~3 GB por arranque).
