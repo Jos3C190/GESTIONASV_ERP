@@ -612,6 +612,11 @@ class LocationUseCases:
         scheme_version: int | None = None,
     ) -> tuple[str, ...]:
         current = await self._repository.get_location(warehouse_id, location_id, for_update=True)
+        if current.location_type == "showcase":
+            raise ValidationError(
+                "La vitrina del punto de venta se administra desde Punto de venta.",
+                code="location_managed_by_pos",
+            )
         scheme = await self._repository.get_scheme(warehouse_id, scheme_version)
         normalized, _projection = _normalize_physical_values(scheme, values)
         required = {"locations.update"}

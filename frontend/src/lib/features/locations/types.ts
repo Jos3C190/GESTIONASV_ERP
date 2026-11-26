@@ -343,8 +343,18 @@ export const LOCATION_STATUS_OPTIONS = [
   { value: 'retired', label: 'Retirada' }
 ] as const;
 
+/** Tipos que crea el propio sistema (no se eligen al crear una ubicación). */
+const SYSTEM_LOCATION_TYPE_LABELS: Record<string, string> = {
+  vehicle: 'Vehículo',
+  showcase: 'Vitrina del punto de venta'
+};
+
 export function locationTypeLabel(value: string): string {
-  return LOCATION_TYPE_OPTIONS.find((option) => option.value === value)?.label ?? value;
+  return (
+    LOCATION_TYPE_OPTIONS.find((option) => option.value === value)?.label ??
+    SYSTEM_LOCATION_TYPE_LABELS[value] ??
+    value
+  );
 }
 
 export function locationStatusLabel(value: string): string {
