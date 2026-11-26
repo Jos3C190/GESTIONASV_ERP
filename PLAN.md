@@ -999,26 +999,23 @@ Pasos:
 - [x] **Paso 0: plan y rama.**
 - [x] **Paso 1: reloj de demostración.** Servicio DTE (middleware, prueba de node) y ERP (variable de contexto y
   encabezado, prueba unitaria). Verificar: `run-tests.sh dte` y pytest.
-- [ ] **Paso 2: siembra del mes.** Preparación de cajas, ventas por día, cobros, devoluciones, cambio y metas.
+- [x] **Paso 2: siembra del mes.** Preparación de cajas, ventas por día, cobros, devoluciones, cambio y metas.
   Verificar: corrida local completa y repetida (no duplica).
-- [ ] **Paso 3: verificación.** Análisis y libros de IVA del mes anterior en el navegador; kardex con salidas.
-- [ ] **Paso 4: documentación y PR.**
+- [x] **Paso 3: verificación.** Análisis y libros de IVA del mes anterior en el navegador; kardex con salidas.
+- [x] **Paso 4: documentación y PR.**
 
 ### V9c — Manual consolidado y prueba integral (se detalla al terminar V9b)
 
 ## Estado actual
 
-- **Paso en curso**: V9b paso 2: la siembra corre el mes completo (octubre de 2026). Retomado el 26/11 tras la pausa.
-  - En commit: reloj de demostración (paso 1), corrección de capacidad (paso 2a) y la siembra
-    `seed/seed_grupo_lorena_sales.py`, enganchada como paso opcional `seed.grupo_lorena.sales_month` con
-    `SEED_DEMO_SALES=true` (nunca en producción).
-  - Ajustes de la siembra: las subidas a S3/MinIO se hacen a la hora real (`RealTimeStorage`: MinIO rechaza firmas con
-    la hora movida, `RequestTimeTooSkewed`); un documento que una corrida dejó pendiente se reprocesa; un error de
-    infraestructura en una venta queda en el reporte y el mes sigue; Panadería Centroamericana (CLI-00004, extranjera)
-    sale de la mezcla porque solo recibe factura de exportación (11).
-  - Prueba de dos días: 10 ventas facturadas, 7 cobros y 3 autorizaciones de crédito.
-  - Falta: terminar la corrida del mes, verificar en el navegador (análisis, libros y kardex de octubre), la batería de
-    inventario tras la corrección de capacidad, documentación y PR.
+- **Paso en curso**: V9b en PR. Mes generado: octubre de 2026 (169 ventas y documentos simulados —127 facturas y 42
+  créditos fiscales—, cobros, 5 devoluciones, 1 cambio y la meta); 328 salidas de kardex en octubre; la segunda corrida
+  no crea nada. Verificado en el navegador: análisis de octubre ($9,767.19 sin IVA, margen 32.68 %, devoluciones 1.96 %)
+  y libros de IVA de octubre. Batería de inventario tras la corrección de capacidad: 567 pasan. Sigue V9c (manual
+  consolidado y prueba integral).
+  - Corregido en la QA: el gráfico de venta por día mostraba el día anterior (`new Date('AAAA-MM-DD')` es medianoche
+    UTC); la página pasa mediodía local. El mismo componente `AreaChart` del Dashboard podría tener el desfase con su
+    serie de actividad (no revisado).
 - **Red del contenedor**: el backend no descarga de PyPI (un certificado intercepta TLS: `UnknownIssuer`). `time-machine`
   se agregó al lock desde el equipo con `uv add --native-tls --no-sync --group dev` y se instaló en el contenedor con la
   rueda Linux bajada por `pip download --platform manylinux2014_x86_64 --python-version 3.12` (`uv pip install --offline`).
