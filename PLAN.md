@@ -847,13 +847,27 @@ Pasos:
 
 ### V8b — Cambio de producto e invalidación tipo 3, cierre de período (se detalla al terminar V8a)
 
+## Corrección: multipleOf del servicio DTE (rama `feature/dte-multipleof-precision`, 25/11/2026)
+
+Encontrado en la QA de V8a: un CCF de 20 × $33.93 con 3 % de descuento (`ventaGravada` 658.242) falló con
+«/cuerpoDocumento/0/ventaGravada must be multiple of 1e-8». El schema oficial (svfe-json-schemas) permite 8
+decimales en las líneas (`multipleOf` 1e-8) y 2 en los totales (0.01): el monto es válido y el ERP no cambia.
+El fallo es de Ajv, que divide en punto flotante (658.242 / 1e-8 = 65824199999.99999, error de 7.6e-6, por
+encima de `multipleOfPrecision: 6`). Decisión: reemplazar la regla `multipleOf` de Ajv por una exacta que cuenta
+los decimales de la representación más corta del número (la misma que va en el JSON a Hacienda).
+
+- [x] **Paso 1: validador y pruebas.** `dte-service/src/validators/dteSchema.js` (`esMultiploDe`) y
+  `dte-service/test/unit/multipleOfDecimales.test.js` (reproduce el CCF). Verificar: suite del servicio en verde.
+- [ ] **Paso 2: volver a facturar el pedido de ejemplo.** Reconstruir `dte-service` y facturar de nuevo
+  PED-20261125-F2CA0F48 (Grupo Lorena, simulado). Verificar: CCF sellado en simulado.
+
 ## Estado actual
 
-- **Error encontrado en la QA de V8a (fuera de alcance)**: el servicio DTE rechazó un CCF con
-  `ventaGravada` 658.242 (20 × $33.93 con 3 % de descuento): `multipleOf 1e-8` falla por precisión de punto
-  flotante en la validación del esquema. Pedido PED-20261125-F2CA0F48 quedó con su CCF `failed` (se puede
-  volver a facturar cuando se corrija). Se propone como tarea aparte.
-- **Paso en curso**: V8a PR; pasos 1 a 5 hechos (ajuste fiscal al aceptar en `return_fiscal.py`) (reintegros `RI-000001` en `/sales/receipts/{id}/refunds`; e2e `test_sales_refunds.py`) (0142 en desarrollo, `sales_return_fiscal.py`). V5 completo en develop (#63, #64).
+- **Paso en curso**: corrección de multipleOf del servicio DTE (sección propia arriba); paso 1 hecho, falta
+  reconstruir el servicio y volver a facturar PED-20261125-F2CA0F48. Las pruebas del servicio corren sin
+  `node_modules` local (better-sqlite3 no compila en Windows) montando `src` y `test` en la imagen:
+  `MSYS_NO_PATHCONV=1 docker run --rm -v "<ruta>\dte-service\src:/app/src" -v "<ruta>\dte-service\test:/app/test" -w /app proyecto_erp-dte-service npm test`.
+- **V8a**: en develop (#65); pasos 1 a 5 hechos (ajuste fiscal al aceptar en `return_fiscal.py`) (reintegros `RI-000001` en `/sales/receipts/{id}/refunds`; e2e `test_sales_refunds.py`) (0142 en desarrollo, `sales_return_fiscal.py`). V5 completo en develop (#63, #64).
 - **Incidente del 25/11/2026**: la unidad C: se llenó (0.46 GB) y Docker se colgó. Con permiso del usuario se borraron
   los `swap.vhdx` viejos de WSL en `%LOCALAPPDATA%\Temp` (17.6 GB) y se apagó WSL para reiniciar Docker. La base quedó
   intacta. Si vuelve a pasar: revisar `%LOCALAPPDATA%\Temp` (WSL deja un swap de ~3 GB por arranque).

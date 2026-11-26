@@ -4,17 +4,41 @@ const addFormats = require('ajv-formats');
 const manifest = require('../schemas/manifest');
 
 /**
- * multipleOfPrecision es CRÍTICO para este proyecto: casi todos los campos
- * monetarios de los schemas oficiales usan "multipleOf": 0.01. Sin esta
- * opción, Ajv valida multipleOf con división de punto flotante directa
- * (data / 0.01), y números perfectamente válidos como 131.70 fallan porque
- * en binario se representan como 131.69999999999998863... — un bug conocido
- * y todavía abierto en Ajv (ver ajv-validator/ajv#2329). Sin este fix,
- * facturas matemáticamente correctas se rechazarían aquí mismo, antes
- * siquiera de llegar a Hacienda. El valor 6 sigue la fórmula documentada
- * por Ajv: Math.abs(Math.round(division) - division) < 1e-6.
+ * multipleOf exacto por decimales. Los schemas oficiales usan "multipleOf": 0.01
+ * en los totales y 1e-8 en las líneas (precioUni, ventaGravada, etc.). Ajv lo
+ * valida dividiendo en punto flotante, y eso falla con montos válidos: 131.70
+ * con 0.01 (ajv-validator/ajv#2329) y 658.242 con 1e-8 (658.242 / 1e-8 da
+ * 65824199999.99999, fuera de cualquier tolerancia de multipleOfPrecision).
+ * Como el JSON que llega a Hacienda lleva la representación decimal más corta
+ * del número (la de String y JSON.stringify), un monto es múltiplo de 10^-k
+ * exactamente cuando esa representación tiene k decimales o menos.
  */
-const ajv = new Ajv({ allErrors: true, strict: false, multipleOfPrecision: 6 });
+function decimalesDe(numero) {
+  const [mantisa, exponente] = String(Math.abs(numero)).split('e');
+  const decimales = (mantisa.split('.')[1] || '').length;
+  return Math.max(0, decimales - Number(exponente || 0));
+}
+
+function esMultiploDe(numero, divisor) {
+  const k = -Math.log10(divisor);
+  if (Number.isInteger(k) && k >= 0) return decimalesDe(numero) <= k;
+  const division = numero / divisor;
+  return Math.abs(Math.round(division) - division) < 1e-6;
+}
+
+const ajv = new Ajv({ allErrors: true, strict: false });
+ajv.removeKeyword('multipleOf');
+ajv.addKeyword({
+  keyword: 'multipleOf',
+  type: 'number',
+  schemaType: 'number',
+  errors: true,
+  validate: function multipleOf(divisor, numero) {
+    if (esMultiploDe(numero, divisor)) return true;
+    multipleOf.errors = [{ keyword: 'multipleOf', message: `must be multiple of ${divisor}`, params: { multipleOf: divisor } }];
+    return false;
+  },
+});
 addFormats(ajv);
 
 const _validadoresPorTipoDte = {};
@@ -54,4 +78,4 @@ function validarEvento(tipoEvento, documento) {
   return { valido, errores: validar.errors || [], schema: info.nombre, version: info.version };
 }
 
-module.exports = { validarDte, validarEvento };
+module.exports = { validarDte, validarEvento, esMultiploDe };
