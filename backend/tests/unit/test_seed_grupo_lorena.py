@@ -32,6 +32,7 @@ def test_follow_ups_run_fleet_automatically_and_operations_only_on_request() -> 
         "seed.grupo_lorena.price_lists",
         "seed.grupo_lorena.sales_discounts",
         "seed.grupo_lorena.operations",
+        "seed.grupo_lorena.sales_month",
     ]
     enabled = {step.key: step.enabled for step in seed_data.FOLLOW_UPS}
     assert enabled["seed.grupo_lorena.fleet"]() is True
@@ -147,3 +148,13 @@ def test_grupo_lorena_gallery_payload_matches_media_registry() -> None:
                 "caption": "",
                 "public_id": asset.public_id,
             }
+
+
+def test_demo_sales_need_the_flag_and_never_run_in_production(monkeypatch) -> None:
+    monkeypatch.delenv("SEED_DEMO_SALES", raising=False)
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    assert seed_data.demo_sales_enabled() is False
+    monkeypatch.setenv("SEED_DEMO_SALES", "true")
+    assert seed_data.demo_sales_enabled() is True
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    assert seed_data.demo_sales_enabled() is False

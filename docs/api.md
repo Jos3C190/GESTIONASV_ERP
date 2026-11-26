@@ -2572,3 +2572,16 @@ The permission catalogue (`app/application/rbac/catalogue.py`) now also lists th
 migrations in V3–V8 (`fiscal_books:*`, `fiscal_periods:manage`, `sales_credit:authorize`,
 `sales_invoices:contingency`, `:invalidate`, `:notes`, `:returns`, `sales_receivables:*`), so they are
 protected and included for superusers.
+
+## Demonstration clock of the DTE service (block V9b)
+
+`dte-service` accepts `X-DTE-Demo-Clock` (an ISO 8601 instant, not in the future) on `/api/dte/*` only when
+`DTE_DEMO_CLOCK_ENABLED=true` (never with `DTE_MODE=production`) and the request's issuer is simulated; then
+`fecEmi`, `horEmi` and the control-number year use that instant for the request. Otherwise the header is
+rejected with `400 DEMO_CLOCK_NOT_ALLOWED` or `DEMO_CLOCK_INVALID`. The ERP sends it only inside the demonstration
+seed (`app/infrastructure/dte_demo_clock.py`); see `docs/ers-v1/manual-datos-demostracion.md`.
+
+Inventory capacity: a movement that changes a unit's status without leaving its location (or capacity group or
+warehouse) no longer counts the unit twice. The occupancy query now flushes the source decrement first
+(`SqlAlchemyInventoryRepository._usage`); before, pallets using more than half of a location could not be split.
+
