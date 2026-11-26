@@ -10,7 +10,8 @@ const { fiscalBooksApi } = vi.hoisted(() => ({
     purchase: vi.fn(),
     recordPurchase: vi.fn(),
     settings: vi.fn(),
-    saveSettings: vi.fn()
+    saveSettings: vi.fn(),
+    periodStatus: vi.fn()
   }
 }));
 vi.mock('#lib/api/fiscal-books.ts', () => ({ fiscalBooksApi }));
@@ -103,6 +104,13 @@ function month(overrides: Partial<FiscalMonth> = {}): FiscalMonth {
 
 beforeEach(() => {
   for (const fn of Object.values(fiscalBooksApi)) fn.mockReset();
+  fiscalBooksApi.periodStatus.mockResolvedValue({
+    period: '2026-10',
+    label: 'octubre de 2026',
+    closed: null,
+    history: [],
+    blockers: []
+  });
   fiscalBooksApi.settings.mockResolvedValue({
     operation: 1,
     classification: 1,

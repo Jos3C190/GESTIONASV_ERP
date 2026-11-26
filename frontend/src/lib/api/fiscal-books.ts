@@ -3,6 +3,7 @@ import type {
   FiscalBookKind,
   FiscalBookMode,
   FiscalMonth,
+  PeriodStatus,
   PurchaseFiscal,
   PurchaseFiscalInput,
   RentaPurchase
@@ -43,6 +44,18 @@ export const fiscalBooksApi = {
     return apiFetch<PurchaseFiscal>(`/fiscal-books/purchases/${id}`, {
       method: 'PUT',
       body: JSON.stringify(payload)
+    });
+  },
+  periodStatus(period: string) {
+    return apiFetch<PeriodStatus>(`/fiscal-books/${period}/close`);
+  },
+  closePeriod(period: string) {
+    return apiFetch<PeriodStatus>(`/fiscal-books/${period}/close`, { method: 'POST' });
+  },
+  reopenPeriod(period: string, reason: string) {
+    return apiFetch<PeriodStatus>(`/fiscal-books/${period}/reopen`, {
+      method: 'POST',
+      body: JSON.stringify({ reason })
     });
   },
   settings() {

@@ -3,6 +3,7 @@
   import Button from '#lib/components/ui/Button.svelte';
   import { HttpError } from '#lib/api/client.ts';
   import { fiscalBooksApi } from '#lib/api/fiscal-books.ts';
+  import PeriodClosePanel from '#lib/features/fiscal-books/PeriodClosePanel.svelte';
   import PurchaseFiscalForm from '#lib/features/fiscal-books/PurchaseFiscalForm.svelte';
   import {
     DOCUMENT_TYPES,
@@ -187,6 +188,7 @@
             : 'bg-success/10 text-success'}">{MODE_LABELS[month.mode]}</span
         >
       </div>
+      <PeriodClosePanel period={month.period} />
       {#if simulated}
         <div
           class="rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm text-warning"
