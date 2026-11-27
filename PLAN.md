@@ -129,7 +129,6 @@ Pasos:
   - Hecho: `PromotionsPage` (ruta /sales/promotions), `OrderSettingsPanel` en Configuración de ventas
     (interruptor «Descontar existencias al confirmar el pedido»), aviso `auto_delivery` en `SaleDetail`.
     Políticas de descuento sin la casilla de vender bajo costo. vitest de ventas y listas: 92 en verde.
-  Hecho: `ShowcasePage.svelte` en `/pos/showcase` (menú «Vitrina», permiso `pos:showcase`), `showcase.test.ts`.
 - [x] **Paso 5: documentación.** Manuales de descuentos, cotizaciones, pedidos y entregas; `api.md` y
   `database-schema.md` (sección 44).
 - [x] **Paso 6: verificación y PR.** Batería completa, QA en el navegador, PR con Auto-fix y auto-merge.
@@ -1223,6 +1222,7 @@ Pasos:
   Nota: una selección parcial con `-k` falla por fixtures de integración que dependen del orden; solos pasan.
 - [x] **Paso 4: interfaz.** Pantalla «Vitrina»: existencias por producto y vencimiento, pasar a vitrina, conteo de
   cierre con merma e historial. Verificar: vitest.
+  Hecho: `ShowcasePage.svelte` en `/pos/showcase` (menú «Vitrina», permiso `pos:showcase`), `showcase.test.ts`.
 - [ ] **Paso 5: documentación, batería, QA y PR.**
 
 ## Estado actual
