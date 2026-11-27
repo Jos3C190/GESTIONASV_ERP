@@ -229,6 +229,11 @@ class InventoryHandlingUnitModel(UUIDPKMixin, TimestampMixin, Base):
     measurement_status: Mapped[str] = mapped_column(String(20), nullable=False)
     measurement_source: Mapped[str] = mapped_column(String(20), nullable=False)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Unidad abierta en la vitrina del punto de venta (V6b): se vende por pieza.
+    opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    opened_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
     inventory_posted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True).evaluates_none(), nullable=True, server_default=func.now()
     )

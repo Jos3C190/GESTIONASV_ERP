@@ -441,6 +441,11 @@ class SqlAlchemyInventoryTransferRepository:
                 "transfer_handling_unit_not_found",
                 404,
             )
+        if unit.opened_at is not None:
+            self._raise(
+                "La unidad está abierta en la vitrina del punto de venta; ahí se vende por pieza.",
+                "transfer_handling_unit_opened",
+            )
         if (
             unit.warehouse_id != origin.id
             or unit.stock_status != "available"
@@ -1473,7 +1478,7 @@ class SqlAlchemyInventoryTransferRepository:
                 Location.deleted_at.is_(None),
                 Location.lifecycle_status == "active",
                 Location.storage_eligible.is_(True),
-                Location.location_type != "virtual",
+                Location.location_type.notin_(("virtual", "showcase")),
             )
         )
         if location is None:
@@ -2218,7 +2223,7 @@ class SqlAlchemyInventoryTransferRepository:
                 Location.deleted_at.is_(None),
                 Location.lifecycle_status == "active",
                 Location.storage_eligible.is_(True),
-                Location.location_type != "virtual",
+                Location.location_type.notin_(("virtual", "showcase")),
             )
         )
         if target is None:

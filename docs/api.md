@@ -2620,3 +2620,31 @@ Errors: `pos_register_*`, `pos_point_of_sale_*`, `pos_shift_not_open`, `pos_shif
 `pos_movement_requires_supervisor`, `pos_self_authorization`, `pos_supervisor_invalid`, `pos_pin_not_set`,
 `pos_pin_locked`, `pos_pin_incorrect`, `pos_pin_invalid`, `pos_pin_weak`, `pos_pin_password_incorrect`,
 `pos_difference_requires_notes`, `pos_retained_float_invalid`, `pos_deposit_*`, `pos_idempotency_conflict`.
+
+## Point of sale: showcase (revision 0147, block V6b)
+
+One showcase per branch: a `showcase` location in one of the branch's warehouses. Units that move there are
+opened and are sold or written off by the piece.
+
+| Method | Path | Permission | Purpose |
+|---|---|---|---|
+| GET | `/pos/showcases?branch_id=` | `pos:sell`, `pos:showcase`, `pos:supervise` or `pos:registers_manage` | Showcases of the user's branches. |
+| GET | `/pos/showcases/warehouse-options?branch_id=` | `pos:registers_manage` | Active, non-transit warehouses of the branch. |
+| POST | `/pos/showcases` | `pos:registers_manage` | `branch_id`, `warehouse_id`. Creates the `VITRINA` location (no capacity control) and the showcase. `CREATE_POS_SHOWCASE`. |
+| GET | `/pos/showcases/{branch_id}/stock` | same as the list | Per product: `quantity`, `sellable` (not expired), `expired`, `next_expiry` and the opened units. |
+| GET | `/pos/showcases/{branch_id}/candidates?search=` | `pos:showcase` | Whole, available, unexpired, unopened units of the showcase warehouse, not in a draft delivery, FEFO. |
+| POST | `/pos/showcases/{branch_id}/open` | `pos:showcase` | `handling_unit_ids`, `idempotency_key`. Moves whole units into the showcase (`transfer`) and opens them. `POS_SHOWCASE_OPEN_UNITS`. |
+| GET | `/pos/showcases/{branch_id}/counts` | `pos:showcase` | Closing counts, newest first. |
+| POST | `/pos/showcases/{branch_id}/counts` | `pos:showcase` | `lines` (`inventory_item_id`, `counted_quantity`, `reason`), `notes`, `idempotency_key`. The difference is waste, posted as `adjustment_out` from the showcase units (expired first) at average cost; `waste_cost` is returned. Counting more than the system holds is refused. `POS_SHOWCASE_COUNT`. |
+
+Inventory engine: a partial `shipment` or `adjustment_out` without destination is accepted in place (same unit)
+only from an opened unit in a `showcase` location; elsewhere the rules are unchanged. An opened unit can never be
+moved to another location (`handling_unit_opened`). Sales deliveries, branch availability for orders, transfer
+dispatch, accepted returns and transfer receipts never use showcase stock (`transfer_handling_unit_opened`).
+`PosShowcaseService.allocate` reserves showcase stock FEFO for counter sales (block V6c).
+
+Errors: `pos_showcase_not_found`, `pos_showcase_exists`, `pos_showcase_warehouse_invalid`,
+`pos_showcase_units_required`, `pos_showcase_unit_unavailable`, `pos_showcase_stock_insufficient`,
+`pos_showcase_count_empty`, `pos_showcase_count_repeated`, `pos_showcase_count_invalid`,
+`pos_showcase_count_over`, `pos_showcase_waste_reason_required`, `location_managed_by_pos` (editing the showcase
+location from the locations module).

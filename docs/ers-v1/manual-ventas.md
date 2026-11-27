@@ -24,7 +24,7 @@ Cliente → (Cotización) → Pedido → Confirmar (sale de bodega) → Factura 
 | Devolución | Mercadería que vuelve, con su nota de crédito o evento de retorno automático; cambio de producto; reintegro | [cobros §8–9](manual-cobros.md) |
 | Libros y F-07 | Libros de contribuyentes, consumidor final y compras; anexos en CSV; cierre del mes | [libros de IVA](manual-libros-iva.md) |
 | Análisis | Venta sin IVA, margen, devoluciones y metas por sucursal | [análisis comercial](manual-analisis-comercial.md) |
-| Punto de venta | Cajas, turnos, efectivo, cierre ciego con aprobación y depósitos | [punto de venta](manual-pos.md) |
+| Punto de venta | Cajas, turnos, efectivo, cierre ciego con aprobación, depósitos y vitrina | [punto de venta](manual-pos.md) |
 
 ## 1. Antes de vender
 

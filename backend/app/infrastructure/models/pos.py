@@ -305,3 +305,102 @@ class PosSupervisorPinModel(Base):
     failed_attempts: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="0")
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = _now()
+
+
+class PosShowcaseModel(Base):
+    """Vitrina de una sucursal (revisión 0147, V6b)."""
+
+    __tablename__ = "pos_showcases"
+
+    id: Mapped[uuid.UUID] = _id()
+    company_id: Mapped[uuid.UUID] = _company()
+    branch_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    warehouse_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    location_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    created_by_id: Mapped[uuid.UUID] = _user()
+    created_at: Mapped[datetime] = _now()
+
+    __table_args__ = (
+        UniqueConstraint("company_id", "id", name="uq_pos_showcases_company_id"),
+        UniqueConstraint(
+            "company_id", "id", "branch_id", name="uq_pos_showcases_company_id_branch"
+        ),
+        UniqueConstraint("company_id", "branch_id", name="uq_pos_showcases_branch"),
+        UniqueConstraint("location_id", name="uq_pos_showcases_location"),
+        ForeignKeyConstraint(
+            ["warehouse_id", "branch_id", "company_id"],
+            ["warehouses.id", "warehouses.branch_id", "warehouses.company_id"],
+            name="fk_pos_showcases_warehouse",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["location_id", "warehouse_id"],
+            ["locations.id", "locations.warehouse_id"],
+            name="fk_pos_showcases_location",
+            ondelete="RESTRICT",
+        ),
+    )
+
+
+class PosShowcaseCountModel(Base):
+    __tablename__ = "pos_showcase_counts"
+
+    id: Mapped[uuid.UUID] = _id()
+    company_id: Mapped[uuid.UUID] = _company()
+    showcase_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    branch_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    number: Mapped[int] = mapped_column(Integer, nullable=False)
+    notes: Mapped[str | None] = mapped_column(String(300))
+    movement_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    waste_cost: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False, server_default="0")
+    counted_by_id: Mapped[uuid.UUID] = _user()
+    counted_at: Mapped[datetime] = _now()
+    idempotency_key: Mapped[str] = mapped_column(String(120), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("company_id", "id", name="uq_pos_showcase_counts_company_id"),
+        UniqueConstraint("company_id", "number", name="uq_pos_showcase_counts_number"),
+        UniqueConstraint(
+            "company_id", "idempotency_key", name="uq_pos_showcase_counts_idempotency"
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "showcase_id", "branch_id"],
+            ["pos_showcases.company_id", "pos_showcases.id", "pos_showcases.branch_id"],
+            name="fk_pos_showcase_counts_showcase",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "movement_id"],
+            ["inventory_movements.company_id", "inventory_movements.id"],
+            name="fk_pos_showcase_counts_movement",
+            ondelete="RESTRICT",
+        ),
+    )
+
+
+class PosShowcaseCountLineModel(Base):
+    __tablename__ = "pos_showcase_count_lines"
+
+    company_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    count_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    inventory_item_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    system_quantity: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    counted_quantity: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    waste_quantity: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(200))
+
+    __table_args__ = (
+        PrimaryKeyConstraint("company_id", "count_id", "inventory_item_id"),
+        ForeignKeyConstraint(
+            ["company_id", "count_id"],
+            ["pos_showcase_counts.company_id", "pos_showcase_counts.id"],
+            name="fk_pos_showcase_count_lines_count",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["company_id", "inventory_item_id"],
+            ["inventory_items.company_id", "inventory_items.id"],
+            name="fk_pos_showcase_count_lines_item",
+            ondelete="RESTRICT",
+        ),
+    )

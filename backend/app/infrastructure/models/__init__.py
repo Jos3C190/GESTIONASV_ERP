@@ -119,6 +119,9 @@ from app.infrastructure.models.pos import (
     PosShiftCountLineModel,
     PosShiftCountModel,
     PosShiftModel,
+    PosShowcaseCountLineModel,
+    PosShowcaseCountModel,
+    PosShowcaseModel,
     PosSupervisorPinModel,
 )
 from app.infrastructure.models.privacy import (
@@ -338,6 +341,9 @@ __all__: list[str] = [
     "PosShiftCountLineModel",
     "PosShiftCountModel",
     "PosShiftModel",
+    "PosShowcaseCountLineModel",
+    "PosShowcaseCountModel",
+    "PosShowcaseModel",
     "PosSupervisorPinModel",
     "PrivacyNoticeModel",
     "ProductBrandModel",
