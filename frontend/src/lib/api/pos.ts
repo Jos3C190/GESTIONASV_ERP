@@ -14,6 +14,10 @@ import type {
   PosShift,
   PosShiftDetail,
   PosShiftPage,
+  PosShowcase,
+  ShowcaseCandidate,
+  ShowcaseCount,
+  ShowcaseStock,
   ShiftStatus,
   SupervisorApproval
 } from '#lib/types/pos.ts';
@@ -142,5 +146,49 @@ export const posApi = {
   },
   createDeposit(input: PosDepositInput) {
     return post<PosDeposit>('/pos/deposits', input);
+  }
+};
+
+/** Vitrina de la sucursal (V6b): existencias, pasar a vitrina y conteo de cierre con merma. */
+export const posShowcaseApi = {
+  list(branchId: string | null) {
+    return apiFetch<PosShowcase[]>(`/pos/showcases${query({ branch_id: branchId })}`);
+  },
+  warehouseOptions(branchId: string) {
+    return apiFetch<{ id: string; name: string }[]>(
+      `/pos/showcases/warehouse-options${query({ branch_id: branchId })}`
+    );
+  },
+  create(branchId: string, warehouseId: string) {
+    return post<PosShowcase>('/pos/showcases', { branch_id: branchId, warehouse_id: warehouseId });
+  },
+  stock(branchId: string) {
+    return apiFetch<ShowcaseStock[]>(`/pos/showcases/${branchId}/stock`);
+  },
+  candidates(branchId: string, search: string) {
+    return apiFetch<ShowcaseCandidate[]>(
+      `/pos/showcases/${branchId}/candidates${query({ search })}`
+    );
+  },
+  open(branchId: string, handlingUnitIds: string[], idempotencyKey: string) {
+    return post<{ movement_id: string; stock: ShowcaseStock[] }>(
+      `/pos/showcases/${branchId}/open`,
+      { handling_unit_ids: handlingUnitIds, idempotency_key: idempotencyKey }
+    );
+  },
+  counts(branchId: string) {
+    return apiFetch<ShowcaseCount[]>(`/pos/showcases/${branchId}/counts`);
+  },
+  count(
+    branchId: string,
+    lines: { inventory_item_id: string; counted_quantity: string; reason: string | null }[],
+    notes: string | null,
+    idempotencyKey: string
+  ) {
+    return post<ShowcaseCount>(`/pos/showcases/${branchId}/counts`, {
+      lines,
+      notes,
+      idempotency_key: idempotencyKey
+    });
   }
 };

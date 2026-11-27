@@ -81,7 +81,8 @@ const ICONS = {
   posTill: 'M4 7h16v12H4z M8 7V4h8v3 M4 12h16 M8 16h2 M14 16h2',
   posShifts: 'M12 3a9 9 0 100 18 9 9 0 000-18z M12 7v5l3 2',
   posDeposits: 'M3 10l9-6 9 6 M5 10v8 M19 10v8 M9 10v8 M15 10v8 M3 20h18',
-  posRegisters: 'M3 7h18v10H3z M7 12h.01 M12 12h4'
+  posRegisters: 'M3 7h18v10H3z M7 12h.01 M12 12h4',
+  posShowcase: 'M3 4h18v16H3z M3 12h18 M8 16h2 M14 16h2'
 };
 
 export const NAV_GROUPS: NavGroup[] = [
@@ -396,6 +397,13 @@ export const NAV_GROUPS: NavGroup[] = [
         route: '/pos/shifts',
         implemented: true,
         requiredPermissions: ['pos:supervise', 'pos:reports']
+      },
+      {
+        label: 'Vitrina',
+        icon: ICONS.posShowcase,
+        route: '/pos/showcase',
+        implemented: true,
+        requiredPermission: 'pos:showcase'
       },
       {
         label: 'Depósitos',

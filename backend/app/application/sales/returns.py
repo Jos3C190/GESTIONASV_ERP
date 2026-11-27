@@ -833,7 +833,7 @@ class SalesReturnService:
                             Warehouse.deleted_at.is_(None),
                             Location.is_active.is_(True),
                             Location.lifecycle_status == "active",
-                            Location.location_type != "virtual",
+                            Location.location_type.notin_(("virtual", "showcase")),
                             Location.deleted_at.is_(None),
                         )
                     )

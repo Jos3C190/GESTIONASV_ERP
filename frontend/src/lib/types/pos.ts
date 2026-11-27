@@ -201,3 +201,73 @@ export interface PosDepositInput {
   notes: string | null;
   idempotency_key: string;
 }
+
+// --- vitrina (V6b) ---------------------------------------------------------------------------
+
+export interface PosShowcase {
+  id: string;
+  branch_id: string;
+  branch_name: string;
+  warehouse_id: string;
+  warehouse_name: string;
+  location_id: string;
+  location_code: string;
+  created_at: string;
+}
+
+export interface ShowcaseUnit {
+  handling_unit_id: string;
+  code: string;
+  quantity: string;
+  lot_code: string | null;
+  expiry_date: string | null;
+  opened_at: string | null;
+  expired: boolean;
+}
+
+export interface ShowcaseStock {
+  inventory_item_id: string;
+  product_name: string;
+  sku: string;
+  unit_symbol: string;
+  quantity: string;
+  sellable: string;
+  expired: string;
+  next_expiry: string | null;
+  units: ShowcaseUnit[];
+}
+
+export interface ShowcaseCandidate {
+  handling_unit_id: string;
+  code: string;
+  inventory_item_id: string;
+  product_name: string;
+  sku: string;
+  unit_symbol: string;
+  quantity: string;
+  lot_code: string | null;
+  expiry_date: string | null;
+  location_code: string;
+}
+
+export interface ShowcaseCountLine {
+  inventory_item_id: string;
+  product_name: string;
+  unit_symbol: string;
+  system_quantity: string;
+  counted_quantity: string;
+  waste_quantity: string;
+  reason: string | null;
+}
+
+export interface ShowcaseCount {
+  id: string;
+  number: number;
+  code: string;
+  counted_by_name: string;
+  counted_at: string;
+  notes: string | null;
+  waste_cost: string;
+  movement_id: string | null;
+  lines: ShowcaseCountLine[];
+}

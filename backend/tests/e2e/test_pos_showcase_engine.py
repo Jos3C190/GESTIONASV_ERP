@@ -128,6 +128,26 @@ async def test_partial_issue_only_from_an_opened_showcase_unit(e2e_client: Async
         )
         await session.commit()
 
+    # Abierta, ya no vuelve a la bodega ni viaja a otra ubicación.
+    with pytest.raises(InventoryOperationError) as moved:
+        await _post(
+            company_id,
+            actor_id,
+            "transfer",
+            [
+                {
+                    "inventory_item_id": item_id,
+                    "handling_unit_id": unit.id,
+                    "from_location_id": showcase,
+                    "from_stock_status": "available",
+                    "to_location_id": unit.location_id,
+                    "to_stock_status": "available",
+                    "quantity_base": "10",
+                }
+            ],
+        )
+    assert moved.value.code == "handling_unit_opened"
+
     sold = await _post(company_id, actor_id, "shipment", issue("shipment", "3", showcase))
     after = await _unit(company_id, item_id)
     assert after.id == unit.id

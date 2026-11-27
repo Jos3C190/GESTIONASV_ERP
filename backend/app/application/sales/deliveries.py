@@ -228,7 +228,8 @@ class SalesDeliveryService:
                     Location.lifecycle_status == "active",
                     Location.storage_eligible.is_(True),
                     Location.deleted_at.is_(None),
-                    Location.location_type != "virtual",
+                    Location.location_type.notin_(("virtual", "showcase")),
+                    InventoryHandlingUnitModel.opened_at.is_(None),
                     (
                         InventoryHandlingUnitModel.expiry_date.is_(None)
                         | (InventoryHandlingUnitModel.expiry_date >= _today())
@@ -310,7 +311,9 @@ class SalesDeliveryService:
                             Location.lifecycle_status == "active",
                             Location.storage_eligible.is_(True),
                             Location.deleted_at.is_(None),
-                            Location.location_type != "virtual",
+                            # La vitrina es existencia de mostrador: no se entrega en pedidos.
+                            Location.location_type.notin_(("virtual", "showcase")),
+                            InventoryHandlingUnitModel.opened_at.is_(None),
                             InventoryHandlingUnitModel.expiry_date.is_(None)
                             | (InventoryHandlingUnitModel.expiry_date >= _today()),
                         )
