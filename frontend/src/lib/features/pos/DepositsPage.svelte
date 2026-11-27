@@ -157,6 +157,7 @@
                 <label class="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm">
                   <input
                     type="checkbox"
+                    aria-label={`Depositar el turno ${item.shift_code}`}
                     checked={chosen.includes(item.shift_id)}
                     onchange={(event) =>
                       toggle(item.shift_id, (event.currentTarget as HTMLInputElement).checked)}

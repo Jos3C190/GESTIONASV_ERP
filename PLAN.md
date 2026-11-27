@@ -1223,11 +1223,14 @@ Pasos:
 - [x] **Paso 4: interfaz.** Pantalla «Vitrina»: existencias por producto y vencimiento, pasar a vitrina, conteo de
   cierre con merma e historial. Verificar: vitest.
   Hecho: `ShowcasePage.svelte` en `/pos/showcase` (menú «Vitrina», permiso `pos:showcase`), `showcase.test.ts`.
-- [ ] **Paso 5: documentación, batería, QA y PR.**
+- [x] **Paso 5: documentación, batería, QA y PR.**
+  Hecho: `docs/api.md`, `docs/database-schema.md` §55, `manual-pos.md` §8. Suite backend: 2143 pasan. QA en el
+  navegador: crear vitrina, pasar una caja, conteo con merma (CV-000001, $0.64), 375 px. Casillas con nombre
+  accesible. PR a develop.
 
 ## Estado actual
 
-- **Paso en curso**: V6b paso 5 (documentación, batería, QA y PR). V6a en develop (#73, 26/11/2026)., rama `feature/pos-v6a-cajas`. V9 completo en develop
+- **Paso en curso**: V6b en PR (Auto-fix y auto-merge); sigue V6c (venta de mostrador) cuando entre a develop. V6a en develop (#73, 26/11/2026)., rama `feature/pos-v6a-cajas`. V9 completo en develop
   (#69–#71) y versión v2.1.0 publicada (26/11/2026). El plan del POS (V6a–V6f) está arriba, con las decisiones del usuario.
   créditos fiscales—, cobros, 5 devoluciones, 1 cambio y la meta); 328 salidas de kardex en octubre; la segunda corrida
   no crea nada. Verificado en el navegador: análisis de octubre ($9,767.19 sin IVA, margen 32.68 %, devoluciones 1.96 %)
