@@ -57,6 +57,7 @@ from app.api.v1.routers import (
     operational_context,
     organization,
     pos,
+    pos_showcase,
     price_lists,
     privacy,
     product_fiscal,
@@ -171,6 +172,7 @@ api_router.include_router(sales_invoices.router, prefix="/api/v1")
 api_router.include_router(sales_fiscal_returns.router, prefix="/api/v1")
 api_router.include_router(fiscal_books.router, prefix="/api/v1")
 api_router.include_router(sales_receivables.router, prefix="/api/v1")
+api_router.include_router(pos_showcase.router, prefix="/api/v1")
 api_router.include_router(pos.router, prefix="/api/v1")
 api_router.include_router(sales_analytics.router, prefix="/api/v1")
 api_router.include_router(sales_orders.router, prefix="/api/v1")

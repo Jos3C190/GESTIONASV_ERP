@@ -32,6 +32,7 @@ const TITLES: Record<string, string> = {
   '/pos': 'Caja',
   '/pos/shifts': 'Turnos de caja',
   '/pos/deposits': 'Depósitos',
+  '/pos/showcase': 'Vitrina',
   '/pos/registers': 'Cajas',
   '/purchase-requests': 'Solicitudes de compra',
   '/purchase-quotations': 'Cotizaciones de compra',

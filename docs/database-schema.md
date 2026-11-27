@@ -1498,3 +1498,21 @@ Revision `0146` (revises `0145`), block V6a.
 
 **Downgrade** refuses while registers, PINs or assignments of the two roles exist. Covered by
 `backend/tests/integration/test_pos_registers_migration.py`.
+
+## 55. Point of sale: showcase (0147)
+
+Revision `0147` (revises `0146`), block V6b.
+
+- `locations.location_type` admits `showcase`. Trigger `guard_pos_showcase_location`: a showcase location keeps
+  its type, and while a branch uses it, it cannot be deactivated, retired, deleted or moved to another warehouse.
+- `warehouses` gains `UNIQUE (id, branch_id, company_id)`.
+- `pos_showcases`: `branch_id` (one per branch), `warehouse_id` (composite FK: a warehouse of that branch),
+  `location_id` (unique), `created_by_id`.
+- `inventory_handling_units.opened_at` / `opened_by_id` (both or neither): the unit was opened in the showcase.
+- `pos_showcase_counts`: `showcase_id`, `branch_id`, `number`, `notes`, `movement_id` (the waste adjustment, if any),
+  `waste_cost`, `counted_by_id`, `idempotency_key`. `pos_showcase_count_lines`: `inventory_item_id` (composite FK),
+  `system_quantity`, `counted_quantity` (≤ system), `waste_quantity` (= system − counted), `reason` (required when
+  there is waste). Both append-only.
+
+**Downgrade** refuses while showcases or opened units exist. Covered by
+`backend/tests/integration/test_pos_showcase_migration.py`.

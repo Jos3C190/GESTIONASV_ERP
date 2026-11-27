@@ -892,7 +892,7 @@ class Location(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
             name="ck_locations_lifecycle_status",
         ),
         CheckConstraint(
-            "location_type IN ('standard','bulk','receiving','reserve','picking','staging','quality','packing','shipping','returns','virtual','vehicle')",
+            "location_type IN ('standard','bulk','receiving','reserve','picking','staging','quality','packing','shipping','returns','virtual','vehicle','showcase')",
             name="ck_locations_type",
         ),
         CheckConstraint(

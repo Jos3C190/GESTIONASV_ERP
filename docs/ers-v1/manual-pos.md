@@ -1,4 +1,4 @@
-# Manual del punto de venta: caja, turnos y depósitos
+# Manual del punto de venta: caja, turnos, depósitos y vitrina
 
 El punto de venta trabaja por **turnos**: cada cajero abre el suyo en una caja, mueve efectivo durante el día,
 lo cuenta al terminar y un supervisor aprueba el cierre. Después, el efectivo se deposita en el banco.
@@ -74,3 +74,19 @@ En **Punto de venta → Depósitos**, con la sucursal elegida, marca los turnos 
 contado menos el fondo que quedó, más sus retiros a caja fuerte. Escribe el banco, la cuenta, el número de
 boleta y el monto depositado. La fecha no puede ser futura ni anterior al cierre de los turnos. Si el monto no
 cuadra, explica la diferencia. Una boleta no se registra dos veces.
+
+## 8. Vitrina
+
+La **vitrina** es la existencia suelta del mostrador. Cada sucursal tiene una, dentro de una de sus bodegas.
+
+- **Crearla** (Punto de venta → Vitrina, quien configura cajas): elige la bodega. Se crea la ubicación
+  `VITRINA`, que no se edita ni se retira desde el módulo de ubicaciones.
+- **Pasar a vitrina** (supervisor de tienda): elige unidades completas de la bodega, primero las que vencen antes.
+  Al pasar, la unidad se **abre**: desde entonces se vende por pieza y ya no se usa en pedidos, entregas ni
+  traslados. Si solo va una parte de la caja, fracciónala antes en la bodega.
+- **Existencias**: por producto, lo que se puede vender y lo vencido, con el próximo vencimiento. La caja vende
+  primero lo que vence antes y nunca lo vencido.
+- **Conteo de cierre**: al terminar el día cuenta lo que queda. Lo que falta contra el sistema es **merma**: sale
+  del inventario al costo promedio, con su motivo, y queda en el historial con su costo. Lo vencido sale primero
+  como merma. Si cuentas **más** de lo que registra el sistema, el conteo se rechaza: primero pasa a vitrina lo que
+  falta registrar.

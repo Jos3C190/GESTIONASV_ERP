@@ -387,7 +387,8 @@ class SqlAlchemySalesOrderRepository(SalesDocumentSupport):
                 Location.lifecycle_status == "active",
                 Location.storage_eligible.is_(True),
                 Location.deleted_at.is_(None),
-                Location.location_type != "virtual",
+                Location.location_type.notin_(("virtual", "showcase")),
+                unit.opened_at.is_(None),
             )
             .group_by(unit.inventory_item_id)
         )

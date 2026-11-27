@@ -3016,10 +3016,25 @@ class SqlAlchemyInventoryRepository:
                 lot_code = handling_unit.lot_code
                 expiry_date = handling_unit.expiry_date
                 packaging_snapshot = handling_unit.packaging_snapshot
+                if handling_unit.opened_at is not None and to_location_id is not None:
+                    raise InventoryOperationError(
+                        "La unidad está abierta en la vitrina; solo se vende o se merma por pieza.",
+                        code="handling_unit_opened",
+                        status_code=409,
+                    )
                 is_partial_split = quantity < handling_unit.quantity_base
+                # Una unidad abierta en la vitrina del punto de venta (V6b) se vende y se
+                # merma por pieza: la salida parcial queda en la misma unidad, como un ajuste.
+                showcase_issue = (
+                    handling_unit.opened_at is not None
+                    and from_location_id is not None
+                    and contexts[from_location_id].location.location_type == "showcase"
+                    and movement_type in {"shipment", "adjustment_out"}
+                )
+                # Salida parcial en su lugar: el ajuste de pérdida y la venta desde vitrina.
                 is_partial_adjustment_out = (
                     is_partial_split
-                    and movement_type == "adjustment_out"
+                    and (movement_type == "adjustment_out" or showcase_issue)
                     and to_location_id is None
                     and to_status is None
                 )
